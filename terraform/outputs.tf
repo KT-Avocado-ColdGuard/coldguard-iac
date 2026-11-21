@@ -1,5 +1,10 @@
 # Root outputs will be added when module outputs are defined.
 
+output "aws_region" {
+  description = "AWS Region used for this deployment"
+  value       = var.aws_region
+}
+
 # EKS Cluster
 output "eks_cluster_name" {
   description = "EKS Cluster Name"
