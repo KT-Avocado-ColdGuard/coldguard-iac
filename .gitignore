@@ -1,0 +1,62 @@
+
+# ==========================================
+# ColdGuard Git Ignore
+# ==========================================
+
+# Terraform working directory
+**/.terraform/
+
+# Terraform state files
+*.tfstate
+*.tfstate.*
+*.tfstate.backup
+
+# Terraform variable files
+*.tfvars
+*.tfvars.json
+
+# Allow example variable files
+!*.tfvars.example
+!*.tfvars.json.example
+
+# Terraform plan files
+*.tfplan
+tfplan
+tfplan.*
+
+# Terraform crash logs
+crash.log
+crash.*.log
+
+# Terraform override files
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Terraform CLI local configuration
+.terraformrc
+terraform.rc
+
+# Lambda build artifacts
+**/failover.zip
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Environment variables and credentials
+.env
+.env.*
+!.env.example
+
+*.pem
+*.key
+*.p12
+*.pfx
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

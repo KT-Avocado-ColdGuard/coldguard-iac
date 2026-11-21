@@ -1,0 +1,146 @@
+
+# ============================================================
+# ColdGuard Terraform Variables Example
+# ============================================================
+#
+# 이 파일은 Terraform 변수 설정 예시입니다.
+#
+# 사용 방법:
+# 1. terraform.tfvars.example 파일을 복사합니다.
+# 2. 복사한 파일 이름을 terraform.tfvars로 변경합니다.
+# 3. 실제 환경에 맞게 변수값을 수정합니다.
+# 4. terraform init / plan / apply 명령어를 실행합니다.
+#
+# 주의:
+# - terraform.tfvars는 Git에 업로드하지 않습니다.
+# - terraform.tfvars.example은 Git에 업로드할 수 있습니다.
+#
+# ============================================================
+
+
+# ============================================================
+# 1. Project Configuration
+# ============================================================
+
+# 프로젝트 이름 (AWS 리소스 이름의 접두사)
+name = "coldguard"
+
+# 프로젝트 담당자 또는 팀 이름 (AWS 공통 태그)
+owner = "Your-Team-Name"
+
+# 배포 환경 (예: dev, staging, prod)
+environment = "prod"
+
+# AWS 리전
+aws_region = "ap-northeast-2"
+
+
+# ============================================================
+# 2. VPC Configuration
+# ============================================================
+
+# VPC 네트워크 CIDR
+vpc_cidr = "10.80.0.0/16"
+
+# 사용할 AWS 가용 영역
+availability_zones = [
+  "ap-northeast-2a",
+  "ap-northeast-2c"
+]
+
+
+# ============================================================
+# 3. Subnet Configuration
+# ============================================================
+
+# public = true  : Public Subnet
+# public = false : Private Subnet
+#
+# NAT Instance는 Public Subnet에 배치합니다.
+# EKS Worker Node는 Private Subnet에 배치합니다.
+
+subnets = {
+
+  # Public Subnet - AZ A
+  public_a = {
+    az     = "ap-northeast-2a"
+    cidr   = "10.80.0.0/24"
+    public = true
+  }
+
+  # Public Subnet - AZ C
+  public_c = {
+    az     = "ap-northeast-2c"
+    cidr   = "10.80.1.0/24"
+    public = true
+  }
+
+  # Private Subnet - AZ A
+  private_a = {
+    az     = "ap-northeast-2a"
+    cidr   = "10.80.16.0/20"
+    public = false
+  }
+
+  # Private Subnet - AZ C
+  private_c = {
+    az     = "ap-northeast-2c"
+    cidr   = "10.80.32.0/20"
+    public = false
+  }
+}
+
+
+# ============================================================
+# 4. EC2 Instance Configuration
+# ============================================================
+
+# subnet        : 배치할 Public Subnet 이름
+# instance_type : EC2 인스턴스 유형
+# volume_size   : Root EBS 크기 (GiB)
+#
+# NAT Instance는 각 AZ에 하나씩 생성합니다.
+# Router Instance는 Tailscale VPN 연결에 사용합니다.
+
+instances = {
+
+  # NAT Instance - AZ A
+  nat_a = {
+    subnet        = "public_a"
+    instance_type = "t3.micro"
+    volume_size   = 10
+  }
+
+  # NAT Instance - AZ C
+  nat_c = {
+    subnet        = "public_c"
+    instance_type = "t3.micro"
+    volume_size   = 10
+  }
+
+  # Tailscale Router - AZ A
+  router_a = {
+    subnet        = "public_a"
+    instance_type = "t3.micro"
+    volume_size   = 10
+  }
+}
+
+
+# ============================================================
+# 5. EKS Configuration
+# ============================================================
+
+# EKS Kubernetes API Public Endpoint 접근 허용 IP
+#
+# 보안을 위해 실제 접속할 PC의 공인 IP만 허용합니다.
+#
+# 아래 IP는 문서용 예시 주소입니다.
+# 반드시 자신의 공인 IP로 변경하세요.
+#
+# 예:
+# 203.0.113.10/32
+
+eks_public_access_cidrs = [
+  "203.0.113.10/32"
+]

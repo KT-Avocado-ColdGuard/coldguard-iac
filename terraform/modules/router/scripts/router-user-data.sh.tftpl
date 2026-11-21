@@ -1,0 +1,46 @@
+#!/bin/bash
+set -euxo pipefail
+
+# ========================================
+# 1. 기본 패키지 설치
+# ========================================
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y curl ca-certificates
+
+
+# ========================================
+# 2. IP Forwarding 영구 활성화
+# ========================================
+
+cat > /etc/sysctl.d/99-coldguard-router.conf <<'EOF'
+net.ipv4.ip_forward = 1
+EOF
+
+sysctl -p /etc/sysctl.d/99-coldguard-router.conf
+
+
+# ========================================
+# 3. Tailscale 설치
+# ========================================
+
+curl -fsSL https://tailscale.com/install.sh | sh
+
+
+# ========================================
+# 4. Tailscale 서비스 자동 시작
+# ========================================
+
+systemctl enable --now tailscaled.service
+
+
+# ========================================
+# 5. 설치 상태 확인
+# ========================================
+
+tailscale version
+sysctl net.ipv4.ip_forward
+
+echo "ColdGuard Router setup completed"

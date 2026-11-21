@@ -1,0 +1,1241 @@
+
+Terraform used the selected providers to generate the following execution
+plan. Resource actions are indicated with the following symbols:
+  + create
+ <= read (data resources)
+
+Terraform will perform the following actions:
+
+  # aws_route.private_nat["private_a"] will be created
+  + resource "aws_route" "private_nat" {
+      + destination_cidr_block = "0.0.0.0/0"
+      + id                     = (known after apply)
+      + instance_id            = (known after apply)
+      + instance_owner_id      = (known after apply)
+      + network_interface_id   = (known after apply)
+      + origin                 = (known after apply)
+      + region                 = "ap-northeast-2"
+      + route_table_id         = (known after apply)
+      + state                  = (known after apply)
+    }
+
+  # aws_route.private_nat["private_c"] will be created
+  + resource "aws_route" "private_nat" {
+      + destination_cidr_block = "0.0.0.0/0"
+      + id                     = (known after apply)
+      + instance_id            = (known after apply)
+      + instance_owner_id      = (known after apply)
+      + network_interface_id   = (known after apply)
+      + origin                 = (known after apply)
+      + region                 = "ap-northeast-2"
+      + route_table_id         = (known after apply)
+      + state                  = (known after apply)
+    }
+
+  # module.iam.aws_iam_instance_profile.nat will be created
+  + resource "aws_iam_instance_profile" "nat" {
+      + arn         = (known after apply)
+      + create_date = (known after apply)
+      + id          = (known after apply)
+      + name        = "coldguard-prod-nat-profile"
+      + name_prefix = (known after apply)
+      + path        = "/"
+      + role        = "coldguard-prod-nat-role"
+      + tags        = {
+          + "Name" = "coldguard-prod-nat-profile"
+        }
+      + tags_all    = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-profile"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + unique_id   = (known after apply)
+    }
+
+  # module.iam.aws_iam_instance_profile.router will be created
+  + resource "aws_iam_instance_profile" "router" {
+      + arn         = (known after apply)
+      + create_date = (known after apply)
+      + id          = (known after apply)
+      + name        = "coldguard-prod-router-profile"
+      + name_prefix = (known after apply)
+      + path        = "/"
+      + role        = "coldguard-prod-router-role"
+      + tags        = {
+          + "Name" = "coldguard-prod-router-profile"
+        }
+      + tags_all    = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-router-profile"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + unique_id   = (known after apply)
+    }
+
+  # module.iam.aws_iam_role.nat will be created
+  + resource "aws_iam_role" "nat" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "coldguard-prod-nat-role"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags                  = {
+          + "Name" = "coldguard-prod-nat-role"
+        }
+      + tags_all              = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-role"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + unique_id             = (known after apply)
+
+      + inline_policy (known after apply)
+    }
+
+  # module.iam.aws_iam_role.router will be created
+  + resource "aws_iam_role" "router" {
+      + arn                   = (known after apply)
+      + assume_role_policy    = jsonencode(
+            {
+              + Statement = [
+                  + {
+                      + Action    = "sts:AssumeRole"
+                      + Effect    = "Allow"
+                      + Principal = {
+                          + Service = "ec2.amazonaws.com"
+                        }
+                    },
+                ]
+              + Version   = "2012-10-17"
+            }
+        )
+      + create_date           = (known after apply)
+      + force_detach_policies = false
+      + id                    = (known after apply)
+      + managed_policy_arns   = (known after apply)
+      + max_session_duration  = 3600
+      + name                  = "coldguard-prod-router-role"
+      + name_prefix           = (known after apply)
+      + path                  = "/"
+      + tags                  = {
+          + "Name" = "coldguard-prod-router-role"
+        }
+      + tags_all              = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-router-role"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + unique_id             = (known after apply)
+
+      + inline_policy (known after apply)
+    }
+
+  # module.iam.aws_iam_role_policy_attachment.nat_ssm will be created
+  + resource "aws_iam_role_policy_attachment" "nat_ssm" {
+      + id         = (known after apply)
+      + policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      + role       = "coldguard-prod-nat-role"
+    }
+
+  # module.iam.aws_iam_role_policy_attachment.router_ssm will be created
+  + resource "aws_iam_role_policy_attachment" "router_ssm" {
+      + id         = (known after apply)
+      + policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+      + role       = "coldguard-prod-router-role"
+    }
+
+  # module.nat.data.aws_subnet.nat["nat_a"] will be read during apply
+  # (config refers to values not yet known)
+ <= data "aws_subnet" "nat" {
+      + arn                                            = (known after apply)
+      + assign_ipv6_address_on_creation                = (known after apply)
+      + availability_zone                              = (known after apply)
+      + availability_zone_id                           = (known after apply)
+      + available_ip_address_count                     = (known after apply)
+      + cidr_block                                     = (known after apply)
+      + customer_owned_ipv4_pool                       = (known after apply)
+      + default_for_az                                 = (known after apply)
+      + enable_dns64                                   = (known after apply)
+      + enable_lni_at_device_index                     = (known after apply)
+      + enable_resource_name_dns_a_record_on_launch    = (known after apply)
+      + enable_resource_name_dns_aaaa_record_on_launch = (known after apply)
+      + id                                             = (known after apply)
+      + ipv6_cidr_block                                = (known after apply)
+      + ipv6_cidr_block_association_id                 = (known after apply)
+      + ipv6_native                                    = (known after apply)
+      + map_customer_owned_ip_on_launch                = (known after apply)
+      + map_public_ip_on_launch                        = (known after apply)
+      + outpost_arn                                    = (known after apply)
+      + owner_id                                       = (known after apply)
+      + private_dns_hostname_type_on_launch            = (known after apply)
+      + region                                         = (known after apply)
+      + state                                          = (known after apply)
+      + tags                                           = (known after apply)
+      + vpc_id                                         = (known after apply)
+    }
+
+  # module.nat.data.aws_subnet.nat["nat_c"] will be read during apply
+  # (config refers to values not yet known)
+ <= data "aws_subnet" "nat" {
+      + arn                                            = (known after apply)
+      + assign_ipv6_address_on_creation                = (known after apply)
+      + availability_zone                              = (known after apply)
+      + availability_zone_id                           = (known after apply)
+      + available_ip_address_count                     = (known after apply)
+      + cidr_block                                     = (known after apply)
+      + customer_owned_ipv4_pool                       = (known after apply)
+      + default_for_az                                 = (known after apply)
+      + enable_dns64                                   = (known after apply)
+      + enable_lni_at_device_index                     = (known after apply)
+      + enable_resource_name_dns_a_record_on_launch    = (known after apply)
+      + enable_resource_name_dns_aaaa_record_on_launch = (known after apply)
+      + id                                             = (known after apply)
+      + ipv6_cidr_block                                = (known after apply)
+      + ipv6_cidr_block_association_id                 = (known after apply)
+      + ipv6_native                                    = (known after apply)
+      + map_customer_owned_ip_on_launch                = (known after apply)
+      + map_public_ip_on_launch                        = (known after apply)
+      + outpost_arn                                    = (known after apply)
+      + owner_id                                       = (known after apply)
+      + private_dns_hostname_type_on_launch            = (known after apply)
+      + region                                         = (known after apply)
+      + state                                          = (known after apply)
+      + tags                                           = (known after apply)
+      + vpc_id                                         = (known after apply)
+    }
+
+  # module.nat.aws_autoscaling_group.nat["nat_a"] will be created
+  + resource "aws_autoscaling_group" "nat" {
+      + arn                              = (known after apply)
+      + availability_zones               = (known after apply)
+      + default_cooldown                 = (known after apply)
+      + desired_capacity                 = 1
+      + force_delete                     = false
+      + force_delete_warm_pool           = false
+      + health_check_grace_period        = 300
+      + health_check_type                = "EC2"
+      + id                               = (known after apply)
+      + ignore_failed_scaling_activities = false
+      + load_balancers                   = (known after apply)
+      + max_size                         = 1
+      + metrics_granularity              = "1Minute"
+      + min_size                         = 1
+      + name                             = "coldguard-prod-nat-a-asg"
+      + name_prefix                      = (known after apply)
+      + predicted_capacity               = (known after apply)
+      + protect_from_scale_in            = false
+      + region                           = "ap-northeast-2"
+      + service_linked_role_arn          = (known after apply)
+      + target_group_arns                = (known after apply)
+      + vpc_zone_identifier              = (known after apply)
+      + wait_for_capacity_timeout        = "10m"
+      + warm_pool_size                   = (known after apply)
+
+      + availability_zone_distribution (known after apply)
+
+      + capacity_reservation_specification (known after apply)
+
+      + instance_lifecycle_policy (known after apply)
+
+      + launch_template {
+          + id      = (known after apply)
+          + name    = (known after apply)
+          + version = (known after apply)
+        }
+
+      + mixed_instances_policy (known after apply)
+
+      + tag {
+          + key                 = "Name"
+          + propagate_at_launch = true
+          + value               = "coldguard-prod-nat-a"
+        }
+
+      + traffic_source (known after apply)
+    }
+
+  # module.nat.aws_autoscaling_group.nat["nat_c"] will be created
+  + resource "aws_autoscaling_group" "nat" {
+      + arn                              = (known after apply)
+      + availability_zones               = (known after apply)
+      + default_cooldown                 = (known after apply)
+      + desired_capacity                 = 1
+      + force_delete                     = false
+      + force_delete_warm_pool           = false
+      + health_check_grace_period        = 300
+      + health_check_type                = "EC2"
+      + id                               = (known after apply)
+      + ignore_failed_scaling_activities = false
+      + load_balancers                   = (known after apply)
+      + max_size                         = 1
+      + metrics_granularity              = "1Minute"
+      + min_size                         = 1
+      + name                             = "coldguard-prod-nat-c-asg"
+      + name_prefix                      = (known after apply)
+      + predicted_capacity               = (known after apply)
+      + protect_from_scale_in            = false
+      + region                           = "ap-northeast-2"
+      + service_linked_role_arn          = (known after apply)
+      + target_group_arns                = (known after apply)
+      + vpc_zone_identifier              = (known after apply)
+      + wait_for_capacity_timeout        = "10m"
+      + warm_pool_size                   = (known after apply)
+
+      + availability_zone_distribution (known after apply)
+
+      + capacity_reservation_specification (known after apply)
+
+      + instance_lifecycle_policy (known after apply)
+
+      + launch_template {
+          + id      = (known after apply)
+          + name    = (known after apply)
+          + version = (known after apply)
+        }
+
+      + mixed_instances_policy (known after apply)
+
+      + tag {
+          + key                 = "Name"
+          + propagate_at_launch = true
+          + value               = "coldguard-prod-nat-c"
+        }
+
+      + traffic_source (known after apply)
+    }
+
+  # module.nat.aws_eip.nat["nat_a"] will be created
+  + resource "aws_eip" "nat" {
+      + allocation_id        = (known after apply)
+      + arn                  = (known after apply)
+      + association_id       = (known after apply)
+      + carrier_ip           = (known after apply)
+      + customer_owned_ip    = (known after apply)
+      + domain               = "vpc"
+      + id                   = (known after apply)
+      + instance             = (known after apply)
+      + ipam_pool_id         = (known after apply)
+      + network_border_group = (known after apply)
+      + network_interface    = (known after apply)
+      + private_dns          = (known after apply)
+      + private_ip           = (known after apply)
+      + ptr_record           = (known after apply)
+      + public_dns           = (known after apply)
+      + public_ip            = (known after apply)
+      + public_ipv4_pool     = (known after apply)
+      + region               = "ap-northeast-2"
+      + tags                 = {
+          + "Name" = "coldguard-prod-nat-eip-a"
+        }
+      + tags_all             = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-eip-a"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+    }
+
+  # module.nat.aws_eip.nat["nat_c"] will be created
+  + resource "aws_eip" "nat" {
+      + allocation_id        = (known after apply)
+      + arn                  = (known after apply)
+      + association_id       = (known after apply)
+      + carrier_ip           = (known after apply)
+      + customer_owned_ip    = (known after apply)
+      + domain               = "vpc"
+      + id                   = (known after apply)
+      + instance             = (known after apply)
+      + ipam_pool_id         = (known after apply)
+      + network_border_group = (known after apply)
+      + network_interface    = (known after apply)
+      + private_dns          = (known after apply)
+      + private_ip           = (known after apply)
+      + ptr_record           = (known after apply)
+      + public_dns           = (known after apply)
+      + public_ip            = (known after apply)
+      + public_ipv4_pool     = (known after apply)
+      + region               = "ap-northeast-2"
+      + tags                 = {
+          + "Name" = "coldguard-prod-nat-eip-c"
+        }
+      + tags_all             = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-eip-c"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+    }
+
+  # module.nat.aws_eip_association.nat["nat_a"] will be created
+  + resource "aws_eip_association" "nat" {
+      + allocation_id        = (known after apply)
+      + id                   = (known after apply)
+      + instance_id          = (known after apply)
+      + network_interface_id = (known after apply)
+      + private_ip_address   = (known after apply)
+      + public_ip            = (known after apply)
+      + region               = "ap-northeast-2"
+    }
+
+  # module.nat.aws_eip_association.nat["nat_c"] will be created
+  + resource "aws_eip_association" "nat" {
+      + allocation_id        = (known after apply)
+      + id                   = (known after apply)
+      + instance_id          = (known after apply)
+      + network_interface_id = (known after apply)
+      + private_ip_address   = (known after apply)
+      + public_ip            = (known after apply)
+      + region               = "ap-northeast-2"
+    }
+
+  # module.nat.aws_launch_template.nat["nat_a"] will be created
+  + resource "aws_launch_template" "nat" {
+      + arn             = (known after apply)
+      + default_version = (known after apply)
+      + id              = (known after apply)
+      + image_id        = (sensitive value)
+      + instance_type   = "t3.micro"
+      + latest_version  = (known after apply)
+      + name            = "coldguard-prod-nat-a-lt"
+      + name_prefix     = (known after apply)
+      + region          = "ap-northeast-2"
+      + tags            = {
+          + "Name" = "coldguard-prod-nat-a-lt"
+        }
+      + tags_all        = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-a-lt"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + user_data       = "IyEvYmluL2Jhc2gNCnNldCAtZXV4byBwaXBlZmFpbA0KDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCiMgMS4gaXB0YWJsZXMg7ISk7LmYDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCg0KZXhwb3J0IERFQklBTl9GUk9OVEVORD1ub25pbnRlcmFjdGl2ZQ0KDQphcHQtZ2V0IHVwZGF0ZQ0KYXB0LWdldCBpbnN0YWxsIC15IGlwdGFibGVzDQoNCg0KIyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09DQojIDIuIElQIEZvcndhcmRpbmcg7Zmc7ISx7ZmUDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCg0KY2F0ID4gL2V0Yy9zeXNjdGwuZC85OS1jb2xkZ3VhcmQtbmF0LmNvbmYgPDwnRU9GJw0KbmV0LmlwdjQuaXBfZm9yd2FyZCA9IDENCkVPRg0KDQpzeXNjdGwgLXAgL2V0Yy9zeXNjdGwuZC85OS1jb2xkZ3VhcmQtbmF0LmNvbmYNCg0KDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCiMgMy4gTkFUIOq3nOy5mSDsoIHsmqkg7Iqk7YGs66a97Yq4IOyDneyEsQ0KIyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09DQoNCmNhdCA+IC91c3IvbG9jYWwvc2Jpbi9jb2xkZ3VhcmQtbmF0LnNoIDw8J0VPRicNCiMhL2Jpbi9iYXNoDQpzZXQgLWV1byBwaXBlZmFpbA0KDQojIOyZuOu2gCDthrXsi6Dsl5Ag7IKs7Jqp7ZWY64qUIOq4sOuzuCDsnbjthLDtjpjsnbTsiqQNCldBTl9JRj0kKGlwIC00IHJvdXRlIHNob3cgZGVmYXVsdCB8IGF3ayAne3ByaW50ICQ1OyBleGl0fScpDQoNCmlmIFsgLXogIiRXQU5fSUYiIF07IHRoZW4NCiAgZWNobyAiRVJST1I6IERlZmF1bHQgbmV0d29yayBpbnRlcmZhY2Ugbm90IGZvdW5kIg0KICBleGl0IDENCmZpDQoNCiMgUHJpdmF0ZSBTdWJuZXTsnYQg7Y+s7ZWo7ZWcIFZQQyBDSURSDQpWUENfQ0lEUj0iMTAuODAuMC4wLzE2Ig0KDQojIE5BVCAoTUFTUVVFUkFERSkNCmlwdGFibGVzIC10IG5hdCAtQyBQT1NUUk9VVElORyBcDQogIC1zICIkVlBDX0NJRFIiIC1vICIkV0FOX0lGIiBcDQogIC1qIE1BU1FVRVJBREUgMj4vZGV2L251bGwgfHwgXA0KaXB0YWJsZXMgLXQgbmF0IC1BIFBPU1RST1VUSU5HIFwNCiAgLXMgIiRWUENfQ0lEUiIgLW8gIiRXQU5fSUYiIFwNCiAgLWogTUFTUVVFUkFERQ0KDQojIOyZuOu2gCDrsKntlqUg7KCE64usIO2XiOyaqQ0KaXB0YWJsZXMgLUMgRk9SV0FSRCBcDQogIC1zICIkVlBDX0NJRFIiIFwNCiAgLWkgIiRXQU5fSUYiIC1vICIkV0FOX0lGIiBcDQogIC1qIEFDQ0VQVCAyPi9kZXYvbnVsbCB8fCBcDQppcHRhYmxlcyAtSSBGT1JXQVJEIDEgXA0KICAtcyAiJFZQQ19DSURSIiBcDQogIC1pICIkV0FOX0lGIiAtbyAiJFdBTl9JRiIgXA0KICAtaiBBQ0NFUFQNCg0KIyDsnZHri7Ug7Yyo7YK3IOyghOuLrCDtl4jsmqkNCmlwdGFibGVzIC1DIEZPUldBUkQgXA0KICAtZCAiJFZQQ19DSURSIiBcDQogIC1pICIkV0FOX0lGIiAtbyAiJFdBTl9JRiIgXA0KICAtbSBjb25udHJhY2sgLS1jdHN0YXRlIEVTVEFCTElTSEVELFJFTEFURUQgXA0KICAtaiBBQ0NFUFQgMj4vZGV2L251bGwgfHwgXA0KaXB0YWJsZXMgLUkgRk9SV0FSRCAxIFwNCiAgLWQgIiRWUENfQ0lEUiIgXA0KICAtaSAiJFdBTl9JRiIgLW8gIiRXQU5fSUYiIFwNCiAgLW0gY29ubnRyYWNrIC0tY3RzdGF0ZSBFU1RBQkxJU0hFRCxSRUxBVEVEIFwNCiAgLWogQUNDRVBUDQpFT0YNCg0KY2htb2QgNzU1IC91c3IvbG9jYWwvc2Jpbi9jb2xkZ3VhcmQtbmF0LnNoDQoNCg0KIyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09DQojIDQuIOyerOu2gO2MhSDsi5wgTkFUIOq3nOy5mSDsnpDrj5kg7KCB7JqpDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCg0KY2F0ID4gL2V0Yy9zeXN0ZW1kL3N5c3RlbS9jb2xkZ3VhcmQtbmF0LnNlcnZpY2UgPDwnRU9GJw0KW1VuaXRdDQpEZXNjcmlwdGlvbj1Db2xkR3VhcmQgTkFUIGlwdGFibGVzIHNldHVwDQpXYW50cz1uZXR3b3JrLW9ubGluZS50YXJnZXQNCkFmdGVyPW5ldHdvcmstb25saW5lLnRhcmdldA0KDQpbU2VydmljZV0NClR5cGU9b25lc2hvdA0KRXhlY1N0YXJ0PS91c3IvbG9jYWwvc2Jpbi9jb2xkZ3VhcmQtbmF0LnNoDQpSZW1haW5BZnRlckV4aXQ9eWVzDQoNCltJbnN0YWxsXQ0KV2FudGVkQnk9bXVsdGktdXNlci50YXJnZXQNCkVPRg0KDQpzeXN0ZW1jdGwgZGFlbW9uLXJlbG9hZA0Kc3lzdGVtY3RsIGVuYWJsZSAtLW5vdyBjb2xkZ3VhcmQtbmF0LnNlcnZpY2UNCg0KZWNobyAiQ29sZEd1YXJkIE5BVCBzZXR1cCBjb21wbGV0ZWQiDQo="
+
+      + block_device_mappings {
+          + device_name = "/dev/sda1"
+
+          + ebs {
+              + delete_on_termination      = "true"
+              + encrypted                  = "true"
+              + iops                       = (known after apply)
+              + throughput                 = (known after apply)
+              + volume_initialization_rate = (known after apply)
+              + volume_size                = 10
+              + volume_type                = "gp3"
+            }
+        }
+
+      + iam_instance_profile {
+          + name = "coldguard-prod-nat-profile"
+        }
+
+      + metadata_options {
+          + http_endpoint               = "enabled"
+          + http_protocol_ipv6          = (known after apply)
+          + http_put_response_hop_limit = (known after apply)
+          + http_tokens                 = "required"
+          + instance_metadata_tags      = (known after apply)
+        }
+
+      + network_interfaces {
+          + delete_on_termination = "false"
+          + device_index          = 0
+          + network_interface_id  = (known after apply)
+        }
+
+      + tag_specifications {
+          + resource_type = "instance"
+          + tags          = {
+              + "Name" = "coldguard-prod-nat-a"
+            }
+        }
+    }
+
+  # module.nat.aws_launch_template.nat["nat_c"] will be created
+  + resource "aws_launch_template" "nat" {
+      + arn             = (known after apply)
+      + default_version = (known after apply)
+      + id              = (known after apply)
+      + image_id        = (sensitive value)
+      + instance_type   = "t3.micro"
+      + latest_version  = (known after apply)
+      + name            = "coldguard-prod-nat-c-lt"
+      + name_prefix     = (known after apply)
+      + region          = "ap-northeast-2"
+      + tags            = {
+          + "Name" = "coldguard-prod-nat-c-lt"
+        }
+      + tags_all        = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-c-lt"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + user_data       = "IyEvYmluL2Jhc2gNCnNldCAtZXV4byBwaXBlZmFpbA0KDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCiMgMS4gaXB0YWJsZXMg7ISk7LmYDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCg0KZXhwb3J0IERFQklBTl9GUk9OVEVORD1ub25pbnRlcmFjdGl2ZQ0KDQphcHQtZ2V0IHVwZGF0ZQ0KYXB0LWdldCBpbnN0YWxsIC15IGlwdGFibGVzDQoNCg0KIyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09DQojIDIuIElQIEZvcndhcmRpbmcg7Zmc7ISx7ZmUDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCg0KY2F0ID4gL2V0Yy9zeXNjdGwuZC85OS1jb2xkZ3VhcmQtbmF0LmNvbmYgPDwnRU9GJw0KbmV0LmlwdjQuaXBfZm9yd2FyZCA9IDENCkVPRg0KDQpzeXNjdGwgLXAgL2V0Yy9zeXNjdGwuZC85OS1jb2xkZ3VhcmQtbmF0LmNvbmYNCg0KDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCiMgMy4gTkFUIOq3nOy5mSDsoIHsmqkg7Iqk7YGs66a97Yq4IOyDneyEsQ0KIyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09DQoNCmNhdCA+IC91c3IvbG9jYWwvc2Jpbi9jb2xkZ3VhcmQtbmF0LnNoIDw8J0VPRicNCiMhL2Jpbi9iYXNoDQpzZXQgLWV1byBwaXBlZmFpbA0KDQojIOyZuOu2gCDthrXsi6Dsl5Ag7IKs7Jqp7ZWY64qUIOq4sOuzuCDsnbjthLDtjpjsnbTsiqQNCldBTl9JRj0kKGlwIC00IHJvdXRlIHNob3cgZGVmYXVsdCB8IGF3ayAne3ByaW50ICQ1OyBleGl0fScpDQoNCmlmIFsgLXogIiRXQU5fSUYiIF07IHRoZW4NCiAgZWNobyAiRVJST1I6IERlZmF1bHQgbmV0d29yayBpbnRlcmZhY2Ugbm90IGZvdW5kIg0KICBleGl0IDENCmZpDQoNCiMgUHJpdmF0ZSBTdWJuZXTsnYQg7Y+s7ZWo7ZWcIFZQQyBDSURSDQpWUENfQ0lEUj0iMTAuODAuMC4wLzE2Ig0KDQojIE5BVCAoTUFTUVVFUkFERSkNCmlwdGFibGVzIC10IG5hdCAtQyBQT1NUUk9VVElORyBcDQogIC1zICIkVlBDX0NJRFIiIC1vICIkV0FOX0lGIiBcDQogIC1qIE1BU1FVRVJBREUgMj4vZGV2L251bGwgfHwgXA0KaXB0YWJsZXMgLXQgbmF0IC1BIFBPU1RST1VUSU5HIFwNCiAgLXMgIiRWUENfQ0lEUiIgLW8gIiRXQU5fSUYiIFwNCiAgLWogTUFTUVVFUkFERQ0KDQojIOyZuOu2gCDrsKntlqUg7KCE64usIO2XiOyaqQ0KaXB0YWJsZXMgLUMgRk9SV0FSRCBcDQogIC1zICIkVlBDX0NJRFIiIFwNCiAgLWkgIiRXQU5fSUYiIC1vICIkV0FOX0lGIiBcDQogIC1qIEFDQ0VQVCAyPi9kZXYvbnVsbCB8fCBcDQppcHRhYmxlcyAtSSBGT1JXQVJEIDEgXA0KICAtcyAiJFZQQ19DSURSIiBcDQogIC1pICIkV0FOX0lGIiAtbyAiJFdBTl9JRiIgXA0KICAtaiBBQ0NFUFQNCg0KIyDsnZHri7Ug7Yyo7YK3IOyghOuLrCDtl4jsmqkNCmlwdGFibGVzIC1DIEZPUldBUkQgXA0KICAtZCAiJFZQQ19DSURSIiBcDQogIC1pICIkV0FOX0lGIiAtbyAiJFdBTl9JRiIgXA0KICAtbSBjb25udHJhY2sgLS1jdHN0YXRlIEVTVEFCTElTSEVELFJFTEFURUQgXA0KICAtaiBBQ0NFUFQgMj4vZGV2L251bGwgfHwgXA0KaXB0YWJsZXMgLUkgRk9SV0FSRCAxIFwNCiAgLWQgIiRWUENfQ0lEUiIgXA0KICAtaSAiJFdBTl9JRiIgLW8gIiRXQU5fSUYiIFwNCiAgLW0gY29ubnRyYWNrIC0tY3RzdGF0ZSBFU1RBQkxJU0hFRCxSRUxBVEVEIFwNCiAgLWogQUNDRVBUDQpFT0YNCg0KY2htb2QgNzU1IC91c3IvbG9jYWwvc2Jpbi9jb2xkZ3VhcmQtbmF0LnNoDQoNCg0KIyA9PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09DQojIDQuIOyerOu2gO2MhSDsi5wgTkFUIOq3nOy5mSDsnpDrj5kg7KCB7JqpDQojID09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT09PT0NCg0KY2F0ID4gL2V0Yy9zeXN0ZW1kL3N5c3RlbS9jb2xkZ3VhcmQtbmF0LnNlcnZpY2UgPDwnRU9GJw0KW1VuaXRdDQpEZXNjcmlwdGlvbj1Db2xkR3VhcmQgTkFUIGlwdGFibGVzIHNldHVwDQpXYW50cz1uZXR3b3JrLW9ubGluZS50YXJnZXQNCkFmdGVyPW5ldHdvcmstb25saW5lLnRhcmdldA0KDQpbU2VydmljZV0NClR5cGU9b25lc2hvdA0KRXhlY1N0YXJ0PS91c3IvbG9jYWwvc2Jpbi9jb2xkZ3VhcmQtbmF0LnNoDQpSZW1haW5BZnRlckV4aXQ9eWVzDQoNCltJbnN0YWxsXQ0KV2FudGVkQnk9bXVsdGktdXNlci50YXJnZXQNCkVPRg0KDQpzeXN0ZW1jdGwgZGFlbW9uLXJlbG9hZA0Kc3lzdGVtY3RsIGVuYWJsZSAtLW5vdyBjb2xkZ3VhcmQtbmF0LnNlcnZpY2UNCg0KZWNobyAiQ29sZEd1YXJkIE5BVCBzZXR1cCBjb21wbGV0ZWQiDQo="
+
+      + block_device_mappings {
+          + device_name = "/dev/sda1"
+
+          + ebs {
+              + delete_on_termination      = "true"
+              + encrypted                  = "true"
+              + iops                       = (known after apply)
+              + throughput                 = (known after apply)
+              + volume_initialization_rate = (known after apply)
+              + volume_size                = 10
+              + volume_type                = "gp3"
+            }
+        }
+
+      + iam_instance_profile {
+          + name = "coldguard-prod-nat-profile"
+        }
+
+      + metadata_options {
+          + http_endpoint               = "enabled"
+          + http_protocol_ipv6          = (known after apply)
+          + http_put_response_hop_limit = (known after apply)
+          + http_tokens                 = "required"
+          + instance_metadata_tags      = (known after apply)
+        }
+
+      + network_interfaces {
+          + delete_on_termination = "false"
+          + device_index          = 0
+          + network_interface_id  = (known after apply)
+        }
+
+      + tag_specifications {
+          + resource_type = "instance"
+          + tags          = {
+              + "Name" = "coldguard-prod-nat-c"
+            }
+        }
+    }
+
+  # module.nat.aws_network_interface.nat["nat_a"] will be created
+  + resource "aws_network_interface" "nat" {
+      + arn                       = (known after apply)
+      + enable_primary_ipv6       = (known after apply)
+      + id                        = (known after apply)
+      + interface_type            = (known after apply)
+      + ipv4_prefix_count         = (known after apply)
+      + ipv4_prefixes             = (known after apply)
+      + ipv6_address_count        = (known after apply)
+      + ipv6_address_list         = (known after apply)
+      + ipv6_address_list_enabled = false
+      + ipv6_addresses            = (known after apply)
+      + ipv6_prefix_count         = (known after apply)
+      + ipv6_prefixes             = (known after apply)
+      + mac_address               = (known after apply)
+      + outpost_arn               = (known after apply)
+      + owner_id                  = (known after apply)
+      + private_dns_name          = (known after apply)
+      + private_ip                = (known after apply)
+      + private_ip_list           = (known after apply)
+      + private_ip_list_enabled   = false
+      + private_ips               = (known after apply)
+      + private_ips_count         = (known after apply)
+      + region                    = "ap-northeast-2"
+      + security_groups           = (known after apply)
+      + source_dest_check         = false
+      + subnet_id                 = (known after apply)
+      + tags                      = {
+          + "Name" = "coldguard-prod-nat-eni-a"
+        }
+      + tags_all                  = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-eni-a"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+
+      + attachment (known after apply)
+
+      + connection_tracking_specification (known after apply)
+    }
+
+  # module.nat.aws_network_interface.nat["nat_c"] will be created
+  + resource "aws_network_interface" "nat" {
+      + arn                       = (known after apply)
+      + enable_primary_ipv6       = (known after apply)
+      + id                        = (known after apply)
+      + interface_type            = (known after apply)
+      + ipv4_prefix_count         = (known after apply)
+      + ipv4_prefixes             = (known after apply)
+      + ipv6_address_count        = (known after apply)
+      + ipv6_address_list         = (known after apply)
+      + ipv6_address_list_enabled = false
+      + ipv6_addresses            = (known after apply)
+      + ipv6_prefix_count         = (known after apply)
+      + ipv6_prefixes             = (known after apply)
+      + mac_address               = (known after apply)
+      + outpost_arn               = (known after apply)
+      + owner_id                  = (known after apply)
+      + private_dns_name          = (known after apply)
+      + private_ip                = (known after apply)
+      + private_ip_list           = (known after apply)
+      + private_ip_list_enabled   = false
+      + private_ips               = (known after apply)
+      + private_ips_count         = (known after apply)
+      + region                    = "ap-northeast-2"
+      + security_groups           = (known after apply)
+      + source_dest_check         = false
+      + subnet_id                 = (known after apply)
+      + tags                      = {
+          + "Name" = "coldguard-prod-nat-eni-c"
+        }
+      + tags_all                  = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-eni-c"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+
+      + attachment (known after apply)
+
+      + connection_tracking_specification (known after apply)
+    }
+
+  # module.network.aws_internet_gateway.main will be created
+  + resource "aws_internet_gateway" "main" {
+      + arn      = (known after apply)
+      + id       = (known after apply)
+      + owner_id = (known after apply)
+      + region   = "ap-northeast-2"
+      + tags     = {
+          + "Name" = "coldguard-prod-igw"
+        }
+      + tags_all = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-igw"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id   = (known after apply)
+    }
+
+  # module.network.aws_route.public_default will be created
+  + resource "aws_route" "public_default" {
+      + destination_cidr_block = "0.0.0.0/0"
+      + gateway_id             = (known after apply)
+      + id                     = (known after apply)
+      + instance_id            = (known after apply)
+      + instance_owner_id      = (known after apply)
+      + network_interface_id   = (known after apply)
+      + origin                 = (known after apply)
+      + region                 = "ap-northeast-2"
+      + route_table_id         = (known after apply)
+      + state                  = (known after apply)
+    }
+
+  # module.network.aws_route_table.private["private_a"] will be created
+  + resource "aws_route_table" "private" {
+      + arn              = (known after apply)
+      + id               = (known after apply)
+      + owner_id         = (known after apply)
+      + propagating_vgws = (known after apply)
+      + region           = "ap-northeast-2"
+      + route            = (known after apply)
+      + tags             = {
+          + "Name" = "coldguard-prod-private-rt-a"
+        }
+      + tags_all         = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-private-rt-a"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id           = (known after apply)
+    }
+
+  # module.network.aws_route_table.private["private_c"] will be created
+  + resource "aws_route_table" "private" {
+      + arn              = (known after apply)
+      + id               = (known after apply)
+      + owner_id         = (known after apply)
+      + propagating_vgws = (known after apply)
+      + region           = "ap-northeast-2"
+      + route            = (known after apply)
+      + tags             = {
+          + "Name" = "coldguard-prod-private-rt-c"
+        }
+      + tags_all         = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-private-rt-c"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id           = (known after apply)
+    }
+
+  # module.network.aws_route_table.public will be created
+  + resource "aws_route_table" "public" {
+      + arn              = (known after apply)
+      + id               = (known after apply)
+      + owner_id         = (known after apply)
+      + propagating_vgws = (known after apply)
+      + region           = "ap-northeast-2"
+      + route            = (known after apply)
+      + tags             = {
+          + "Name" = "coldguard-prod-public-rt"
+        }
+      + tags_all         = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-public-rt"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id           = (known after apply)
+    }
+
+  # module.network.aws_route_table_association.private["private_a"] will be created
+  + resource "aws_route_table_association" "private" {
+      + id             = (known after apply)
+      + region         = "ap-northeast-2"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # module.network.aws_route_table_association.private["private_c"] will be created
+  + resource "aws_route_table_association" "private" {
+      + id             = (known after apply)
+      + region         = "ap-northeast-2"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # module.network.aws_route_table_association.public["public_a"] will be created
+  + resource "aws_route_table_association" "public" {
+      + id             = (known after apply)
+      + region         = "ap-northeast-2"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # module.network.aws_route_table_association.public["public_c"] will be created
+  + resource "aws_route_table_association" "public" {
+      + id             = (known after apply)
+      + region         = "ap-northeast-2"
+      + route_table_id = (known after apply)
+      + subnet_id      = (known after apply)
+    }
+
+  # module.network.aws_subnet.private_subnet["private_a"] will be created
+  + resource "aws_subnet" "private_subnet" {
+      + arn                                            = (known after apply)
+      + assign_ipv6_address_on_creation                = false
+      + availability_zone                              = "ap-northeast-2a"
+      + availability_zone_id                           = (known after apply)
+      + cidr_block                                     = "10.80.16.0/20"
+      + enable_dns64                                   = false
+      + enable_resource_name_dns_a_record_on_launch    = false
+      + enable_resource_name_dns_aaaa_record_on_launch = false
+      + id                                             = (known after apply)
+      + ipv6_cidr_block                                = (known after apply)
+      + ipv6_cidr_block_association_id                 = (known after apply)
+      + ipv6_native                                    = false
+      + map_public_ip_on_launch                        = false
+      + owner_id                                       = (known after apply)
+      + private_dns_hostname_type_on_launch            = (known after apply)
+      + region                                         = "ap-northeast-2"
+      + tags                                           = {
+          + "Name" = "coldguard-prod-private-subnet-a"
+        }
+      + tags_all                                       = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-private-subnet-a"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id                                         = (known after apply)
+    }
+
+  # module.network.aws_subnet.private_subnet["private_c"] will be created
+  + resource "aws_subnet" "private_subnet" {
+      + arn                                            = (known after apply)
+      + assign_ipv6_address_on_creation                = false
+      + availability_zone                              = "ap-northeast-2c"
+      + availability_zone_id                           = (known after apply)
+      + cidr_block                                     = "10.80.32.0/20"
+      + enable_dns64                                   = false
+      + enable_resource_name_dns_a_record_on_launch    = false
+      + enable_resource_name_dns_aaaa_record_on_launch = false
+      + id                                             = (known after apply)
+      + ipv6_cidr_block                                = (known after apply)
+      + ipv6_cidr_block_association_id                 = (known after apply)
+      + ipv6_native                                    = false
+      + map_public_ip_on_launch                        = false
+      + owner_id                                       = (known after apply)
+      + private_dns_hostname_type_on_launch            = (known after apply)
+      + region                                         = "ap-northeast-2"
+      + tags                                           = {
+          + "Name" = "coldguard-prod-private-subnet-c"
+        }
+      + tags_all                                       = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-private-subnet-c"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id                                         = (known after apply)
+    }
+
+  # module.network.aws_subnet.public_subnet["public_a"] will be created
+  + resource "aws_subnet" "public_subnet" {
+      + arn                                            = (known after apply)
+      + assign_ipv6_address_on_creation                = false
+      + availability_zone                              = "ap-northeast-2a"
+      + availability_zone_id                           = (known after apply)
+      + cidr_block                                     = "10.80.0.0/24"
+      + enable_dns64                                   = false
+      + enable_resource_name_dns_a_record_on_launch    = false
+      + enable_resource_name_dns_aaaa_record_on_launch = false
+      + id                                             = (known after apply)
+      + ipv6_cidr_block                                = (known after apply)
+      + ipv6_cidr_block_association_id                 = (known after apply)
+      + ipv6_native                                    = false
+      + map_public_ip_on_launch                        = true
+      + owner_id                                       = (known after apply)
+      + private_dns_hostname_type_on_launch            = (known after apply)
+      + region                                         = "ap-northeast-2"
+      + tags                                           = {
+          + "Name" = "coldguard-prod-public-subnet-a"
+        }
+      + tags_all                                       = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-public-subnet-a"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id                                         = (known after apply)
+    }
+
+  # module.network.aws_subnet.public_subnet["public_c"] will be created
+  + resource "aws_subnet" "public_subnet" {
+      + arn                                            = (known after apply)
+      + assign_ipv6_address_on_creation                = false
+      + availability_zone                              = "ap-northeast-2c"
+      + availability_zone_id                           = (known after apply)
+      + cidr_block                                     = "10.80.1.0/24"
+      + enable_dns64                                   = false
+      + enable_resource_name_dns_a_record_on_launch    = false
+      + enable_resource_name_dns_aaaa_record_on_launch = false
+      + id                                             = (known after apply)
+      + ipv6_cidr_block                                = (known after apply)
+      + ipv6_cidr_block_association_id                 = (known after apply)
+      + ipv6_native                                    = false
+      + map_public_ip_on_launch                        = true
+      + owner_id                                       = (known after apply)
+      + private_dns_hostname_type_on_launch            = (known after apply)
+      + region                                         = "ap-northeast-2"
+      + tags                                           = {
+          + "Name" = "coldguard-prod-public-subnet-c"
+        }
+      + tags_all                                       = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-public-subnet-c"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id                                         = (known after apply)
+    }
+
+  # module.network.aws_vpc.main will be created
+  + resource "aws_vpc" "main" {
+      + arn                                  = (known after apply)
+      + cidr_block                           = "10.80.0.0/16"
+      + default_network_acl_id               = (known after apply)
+      + default_route_table_id               = (known after apply)
+      + default_security_group_id            = (known after apply)
+      + dhcp_options_id                      = (known after apply)
+      + enable_dns_hostnames                 = true
+      + enable_dns_support                   = true
+      + enable_network_address_usage_metrics = (known after apply)
+      + id                                   = (known after apply)
+      + instance_tenancy                     = "default"
+      + ipv6_association_id                  = (known after apply)
+      + ipv6_cidr_block                      = (known after apply)
+      + ipv6_cidr_block_network_border_group = (known after apply)
+      + main_route_table_id                  = (known after apply)
+      + owner_id                             = (known after apply)
+      + region                               = "ap-northeast-2"
+      + tags                                 = {
+          + "Name" = "coldguard-prod-vpc"
+        }
+      + tags_all                             = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-vpc"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+    }
+
+  # module.network.aws_vpc_endpoint.s3 will be created
+  + resource "aws_vpc_endpoint" "s3" {
+      + arn                   = (known after apply)
+      + cidr_blocks           = (known after apply)
+      + dns_entry             = (known after apply)
+      + id                    = (known after apply)
+      + ip_address_type       = (known after apply)
+      + network_interface_ids = (known after apply)
+      + owner_id              = (known after apply)
+      + policy                = (known after apply)
+      + prefix_list_id        = (known after apply)
+      + private_dns_enabled   = (known after apply)
+      + region                = "ap-northeast-2"
+      + requester_managed     = (known after apply)
+      + route_table_ids       = (known after apply)
+      + security_group_ids    = (known after apply)
+      + service_name          = "com.amazonaws.ap-northeast-2.s3"
+      + service_region        = (known after apply)
+      + state                 = (known after apply)
+      + subnet_ids            = (known after apply)
+      + tags                  = {
+          + "Name" = "coldguard-prod-s3-vpce"
+        }
+      + tags_all              = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-s3-vpce"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_endpoint_type     = "Gateway"
+      + vpc_id                = (known after apply)
+
+      + dns_options (known after apply)
+
+      + subnet_configuration (known after apply)
+    }
+
+  # module.router.aws_instance.router["router_a"] will be created
+  + resource "aws_instance" "router" {
+      + ami                                  = (sensitive value)
+      + arn                                  = (known after apply)
+      + associate_public_ip_address          = true
+      + availability_zone                    = (known after apply)
+      + disable_api_stop                     = (known after apply)
+      + disable_api_termination              = (known after apply)
+      + ebs_optimized                        = (known after apply)
+      + enable_primary_ipv6                  = (known after apply)
+      + force_destroy                        = false
+      + get_password_data                    = false
+      + host_id                              = (known after apply)
+      + host_resource_group_arn              = (known after apply)
+      + iam_instance_profile                 = "coldguard-prod-router-profile"
+      + id                                   = (known after apply)
+      + instance_initiated_shutdown_behavior = (known after apply)
+      + instance_lifecycle                   = (known after apply)
+      + instance_state                       = (known after apply)
+      + instance_type                        = "t3.micro"
+      + ipv6_address_count                   = (known after apply)
+      + ipv6_addresses                       = (known after apply)
+      + key_name                             = (known after apply)
+      + monitoring                           = (known after apply)
+      + outpost_arn                          = (known after apply)
+      + password_data                        = (known after apply)
+      + placement_group                      = (known after apply)
+      + placement_group_id                   = (known after apply)
+      + placement_partition_number           = (known after apply)
+      + primary_network_interface_id         = (known after apply)
+      + private_dns                          = (known after apply)
+      + private_ip                           = (known after apply)
+      + public_dns                           = (known after apply)
+      + public_ip                            = (known after apply)
+      + region                               = "ap-northeast-2"
+      + secondary_private_ips                = (known after apply)
+      + security_groups                      = (known after apply)
+      + source_dest_check                    = false
+      + spot_instance_request_id             = (known after apply)
+      + subnet_id                            = (known after apply)
+      + tags                                 = {
+          + "Name" = "coldguard-prod-router-a"
+        }
+      + tags_all                             = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-router-a"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + tenancy                              = (known after apply)
+      + user_data                            = <<-EOT
+            #!/bin/bash
+            set -euxo pipefail
+            
+            # ========================================
+            # 1. 기본 패키지 설치
+            # ========================================
+            
+            export DEBIAN_FRONTEND=noninteractive
+            
+            apt-get update
+            apt-get install -y curl ca-certificates
+            
+            
+            # ========================================
+            # 2. IP Forwarding 영구 활성화
+            # ========================================
+            
+            cat > /etc/sysctl.d/99-coldguard-router.conf <<'EOF'
+            net.ipv4.ip_forward = 1
+            EOF
+            
+            sysctl -p /etc/sysctl.d/99-coldguard-router.conf
+            
+            
+            # ========================================
+            # 3. Tailscale 설치
+            # ========================================
+            
+            curl -fsSL https://tailscale.com/install.sh | sh
+            
+            
+            # ========================================
+            # 4. Tailscale 서비스 자동 시작
+            # ========================================
+            
+            systemctl enable --now tailscaled.service
+            
+            
+            # ========================================
+            # 5. 설치 상태 확인
+            # ========================================
+            
+            tailscale version
+            sysctl net.ipv4.ip_forward
+            
+            echo "ColdGuard Router setup completed"
+        EOT
+      + user_data_base64                     = (known after apply)
+      + user_data_replace_on_change          = false
+      + vpc_security_group_ids               = (known after apply)
+
+      + capacity_reservation_specification (known after apply)
+
+      + cpu_options (known after apply)
+
+      + ebs_block_device (known after apply)
+
+      + enclave_options (known after apply)
+
+      + ephemeral_block_device (known after apply)
+
+      + instance_market_options (known after apply)
+
+      + maintenance_options (known after apply)
+
+      + metadata_options {
+          + http_endpoint               = "enabled"
+          + http_protocol_ipv6          = "disabled"
+          + http_put_response_hop_limit = (known after apply)
+          + http_tokens                 = "required"
+          + instance_metadata_tags      = (known after apply)
+        }
+
+      + network_interface (known after apply)
+
+      + primary_network_interface (known after apply)
+
+      + private_dns_name_options (known after apply)
+
+      + root_block_device {
+          + delete_on_termination = true
+          + device_name           = (known after apply)
+          + encrypted             = true
+          + iops                  = (known after apply)
+          + kms_key_id            = (known after apply)
+          + tags_all              = (known after apply)
+          + throughput            = (known after apply)
+          + volume_id             = (known after apply)
+          + volume_size           = 10
+          + volume_type           = "gp3"
+        }
+
+      + secondary_network_interface (known after apply)
+    }
+
+  # module.security.aws_security_group.nat will be created
+  + resource "aws_security_group" "nat" {
+      + arn                    = (known after apply)
+      + description            = "nat instance 보안 그룹"
+      + egress                 = (known after apply)
+      + id                     = (known after apply)
+      + ingress                = (known after apply)
+      + name                   = "coldguard-prod-nat-sg"
+      + name_prefix            = (known after apply)
+      + owner_id               = (known after apply)
+      + region                 = "ap-northeast-2"
+      + revoke_rules_on_delete = false
+      + tags                   = {
+          + "Name" = "coldguard-prod-nat-sg"
+        }
+      + tags_all               = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-nat-sg"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id                 = (known after apply)
+    }
+
+  # module.security.aws_security_group.router will be created
+  + resource "aws_security_group" "router" {
+      + arn                    = (known after apply)
+      + description            = "subnet router 보안 그룹"
+      + egress                 = (known after apply)
+      + id                     = (known after apply)
+      + ingress                = (known after apply)
+      + name                   = "coldguard-prod-router-sg"
+      + name_prefix            = (known after apply)
+      + owner_id               = (known after apply)
+      + region                 = "ap-northeast-2"
+      + revoke_rules_on_delete = false
+      + tags                   = {
+          + "Name" = "coldguard-prod-router-sg"
+        }
+      + tags_all               = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Name"      = "coldguard-prod-router-sg"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + vpc_id                 = (known after apply)
+    }
+
+  # module.security.aws_vpc_security_group_egress_rule.nat_all will be created
+  + resource "aws_vpc_security_group_egress_rule" "nat_all" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "Allow all outbound traffic"
+      + id                     = (known after apply)
+      + ip_protocol            = "-1"
+      + region                 = "ap-northeast-2"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+    }
+
+  # module.security.aws_vpc_security_group_egress_rule.router_all will be created
+  + resource "aws_vpc_security_group_egress_rule" "router_all" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "Allow outbound traffic"
+      + id                     = (known after apply)
+      + ip_protocol            = "-1"
+      + region                 = "ap-northeast-2"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+    }
+
+  # module.security.aws_vpc_security_group_ingress_rule.nat_private["private_a"] will be created
+  + resource "aws_vpc_security_group_ingress_rule" "nat_private" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "10.80.16.0/20"
+      + description            = "Allow traffic from private_a"
+      + id                     = (known after apply)
+      + ip_protocol            = "-1"
+      + region                 = "ap-northeast-2"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+    }
+
+  # module.security.aws_vpc_security_group_ingress_rule.nat_private["private_c"] will be created
+  + resource "aws_vpc_security_group_ingress_rule" "nat_private" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "10.80.32.0/20"
+      + description            = "Allow traffic from private_c"
+      + id                     = (known after apply)
+      + ip_protocol            = "-1"
+      + region                 = "ap-northeast-2"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+    }
+
+  # module.security.aws_vpc_security_group_ingress_rule.router_tailscale will be created
+  + resource "aws_vpc_security_group_ingress_rule" "router_tailscale" {
+      + arn                    = (known after apply)
+      + cidr_ipv4              = "0.0.0.0/0"
+      + description            = "Allow Tailscale traffic on UDP port 41641"
+      + from_port              = 41641
+      + id                     = (known after apply)
+      + ip_protocol            = "udp"
+      + region                 = "ap-northeast-2"
+      + security_group_id      = (known after apply)
+      + security_group_rule_id = (known after apply)
+      + tags_all               = {
+          + "Env"       = "prod"
+          + "ManagedBy" = "Terraform"
+          + "Owner"     = "실제 담당자"
+          + "Project"   = "ColdGuard"
+        }
+      + to_port                = 41641
+    }
+
+Plan: 41 to add, 0 to change, 0 to destroy.

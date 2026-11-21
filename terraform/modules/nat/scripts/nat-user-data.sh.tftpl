@@ -1,0 +1,100 @@
+#!/bin/bash
+set -euxo pipefail
+
+# ========================================
+# 1. iptables 설치
+# ========================================
+
+export DEBIAN_FRONTEND=noninteractive
+
+apt-get update
+apt-get install -y iptables
+
+
+# ========================================
+# 2. IP Forwarding 활성화
+# ========================================
+
+cat > /etc/sysctl.d/99-coldguard-nat.conf <<'EOF'
+net.ipv4.ip_forward = 1
+EOF
+
+sysctl -p /etc/sysctl.d/99-coldguard-nat.conf
+
+
+# ========================================
+# 3. NAT 규칙 적용 스크립트 생성
+# ========================================
+
+cat > /usr/local/sbin/coldguard-nat.sh <<'EOF'
+#!/bin/bash
+set -euo pipefail
+
+# 외부 통신에 사용하는 기본 인터페이스
+WAN_IF=$(ip -4 route show default | awk '{print $5; exit}')
+
+if [ -z "$WAN_IF" ]; then
+  echo "ERROR: Default network interface not found"
+  exit 1
+fi
+
+# Private Subnet을 포함한 VPC CIDR
+VPC_CIDR="${vpc_cidr}"
+
+# NAT (MASQUERADE)
+iptables -t nat -C POSTROUTING \
+  -s "$VPC_CIDR" -o "$WAN_IF" \
+  -j MASQUERADE 2>/dev/null || \
+iptables -t nat -A POSTROUTING \
+  -s "$VPC_CIDR" -o "$WAN_IF" \
+  -j MASQUERADE
+
+# 외부 방향 전달 허용
+iptables -C FORWARD \
+  -s "$VPC_CIDR" \
+  -i "$WAN_IF" -o "$WAN_IF" \
+  -j ACCEPT 2>/dev/null || \
+iptables -I FORWARD 1 \
+  -s "$VPC_CIDR" \
+  -i "$WAN_IF" -o "$WAN_IF" \
+  -j ACCEPT
+
+# 응답 패킷 전달 허용
+iptables -C FORWARD \
+  -d "$VPC_CIDR" \
+  -i "$WAN_IF" -o "$WAN_IF" \
+  -m conntrack --ctstate ESTABLISHED,RELATED \
+  -j ACCEPT 2>/dev/null || \
+iptables -I FORWARD 1 \
+  -d "$VPC_CIDR" \
+  -i "$WAN_IF" -o "$WAN_IF" \
+  -m conntrack --ctstate ESTABLISHED,RELATED \
+  -j ACCEPT
+EOF
+
+chmod 755 /usr/local/sbin/coldguard-nat.sh
+
+
+# ========================================
+# 4. 재부팅 시 NAT 규칙 자동 적용
+# ========================================
+
+cat > /etc/systemd/system/coldguard-nat.service <<'EOF'
+[Unit]
+Description=ColdGuard NAT iptables setup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/coldguard-nat.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload
+systemctl enable --now coldguard-nat.service
+
+echo "ColdGuard NAT setup completed"
