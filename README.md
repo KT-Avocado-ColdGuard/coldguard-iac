@@ -1,6 +1,11 @@
 # ColdGuard
 
-ColdGuard의 AWS 인프라를 Terraform으로 생성하고 관리하는 방법입니다. 코드는 VPC, NAT 및 라우터 EC2, 장애 전환, EKS, ECR을 구성합니다.
+ColdGuard의 AWS 인프라와 EKS 내부 구성을 Terraform으로 생성하고 관리하는 방법입니다. 최상위의 `terraform/`과 `bootstrap/`은 별도의 Terraform Root Module이며, 각각 독립적으로 실행하고 별도의 State를 사용합니다. Bootstrap은 EKS 클러스터나 Worker Node를 새로 생성하지 않습니다.
+
+| 디렉터리 | 관리 대상 | 주요 역할 |
+|---|---|---|
+| `terraform/` | AWS 인프라 | VPC, Subnet, NAT, 라우터 EC2, IAM, EKS, ECR 및 장애 전환 관련 AWS 리소스를 생성·관리합니다. |
+| `bootstrap/` | 기존 EKS 내부 리소스 | gp3 StorageClass를 생성하고 Helm으로 Argo CD를 설치합니다. |
 
 ## 문서 안내
 
@@ -8,7 +13,7 @@ ColdGuard의 AWS 인프라를 Terraform으로 생성하고 관리하는 방법�
 |---|---|
 | [변수 및 설정 가이드](docs/variables/README.md) | 입력 변수, `terraform.tfvars` 작성 방법과 변경 영향 |
 | [프로젝트 구조 및 모듈 가이드](docs/structure/README.md) | 파일 구성, AWS 리소스, 모듈 연결 관계 |
-| [Terraform 사용 가이드](#terraform-사용-가이드) | 설치부터 배포, EKS 초기 설정, 검증, 변경, 삭제까지의 작업 순서 |
+| [Terraform 사용 가이드](#terraform-사용-가이드) | 설치부터 AWS 인프라·Bootstrap 배포, 검증, 변경, 삭제까지의 작업 순서 |
 
 기존 [NAT 장애 전환 검증 기록](ColdGuard_Validation_README.md)은 실제 수행한 테스트 결과와 한계를 별도로 기록합니다.
 
@@ -19,14 +24,17 @@ ColdGuard의 AWS 인프라를 Terraform으로 생성하고 관리하는 방법�
 | 항목 | 요구 사항 |
 |---|---|
 | Terraform | `>= 1.0.0` (`versions.tf` 기준) |
+| Bootstrap Terraform | `>= 1.5.0` (`bootstrap/versions.tf` 기준) |
 | AWS Provider | `~> 6.0` (`terraform init`에서 설치) |
 | Archive Provider | `~> 2.0` (`terraform init`에서 설치) |
+| Kubernetes Provider | `~> 3.0` (`bootstrap/terraform init`에서 설치) |
+| Helm Provider | `~> 3.0` (`bootstrap/terraform init`에서 설치) |
 | AWS CLI | CLI v2 권장; 계정 인증·배포 결과 확인에 사용 |
 | Git | 저장소를 내려받을 때 사용 |
-| Git Bash | 아래 Bash 명령어와 EKS 초기 설정 스크립트 실행에 사용 |
-| kubectl | Terraform 배포 후 EKS 및 Kubernetes 리소스 확인에 사용 |
+| Git Bash | 아래 Bash 명령어와 선택적 EKS 연결 스크립트 실행에 사용 |
+| kubectl | 로컬 PC에서 EKS 및 Kubernetes 리소스를 확인할 때 사용 |
 
-Terraform, AWS CLI, Git, Git Bash, kubectl을 설치하고 명령어를 실행할 수 있는지 확인합니다. AWS 계정에는 코드가 선언한 EC2/VPC, IAM, Auto Scaling, Lambda, CloudWatch, EventBridge, SQS, SNS, EKS, ECR 리소스를 생성·변경·삭제할 권한이 필요합니다. 조직의 승인 및 비용 정책도 확인합니다.
+Terraform, AWS CLI, Git, Git Bash를 설치하고 명령어를 실행할 수 있는지 확인합니다. `kubectl`은 Step 10의 로컬 EKS 연결을 사용할 때 설치합니다. AWS 계정에는 코드가 선언한 EC2/VPC, IAM, Auto Scaling, Lambda, CloudWatch, EventBridge, SQS, SNS, EKS, ECR 리소스를 생성·변경·삭제할 권한이 필요합니다. 조직의 승인 및 비용 정책도 확인합니다.
 
 Git Bash에서 버전을 확인합니다.
 
@@ -45,7 +53,7 @@ aws sts get-caller-identity
 
 자격 증명을 `terraform.tfvars`에 넣지 마세요. AWS CLI 프로필을 쓴다면 실행 전에 `AWS_PROFILE`을 지정합니다.
 
-### Step 2. 프로젝트 내려받기 및 이동
+### Step 2. GitHub 프로젝트 다운로드
 
 저장소 URL은 팀에서 제공받은 실제 URL로 지정합니다. 이미 코드를 받은 경우에는 `git clone`을 생략합니다. 다음 명령은 Git Bash 기준입니다.
 
@@ -55,7 +63,7 @@ git clone "$REPOSITORY_URL" avocado
 cd avocado/terraform
 ```
 
-### Step 3. 입력값 설정 및 공인 IP 등록
+### Step 3. Terraform 입력값 및 공인 IP 설정
 
 `terraform/`에서 예시 파일을 복사한 뒤 `terraform.tfvars`를 편집합니다.
 
@@ -99,7 +107,7 @@ eks_public_access_cidrs = ["203.0.113.10/32"]
 
 팀원이 각자의 AWS 계정에 배포한다면 각자 자신의 공인 IP를 설정해야 합니다. VPN이나 프록시를 사용하면 EKS API에 접속하는 출발지 공인 IP가 달라질 수 있으므로 해당 환경에서 확인하세요. `0.0.0.0/0`으로 모든 IP를 허용하지 마세요. 이 변수는 EKS Public API의 네트워크 접근만 제한하며 AWS 웹 콘솔 로그인 자체를 제한하지 않습니다. Public API 허용 IP에 들어 있더라도 IAM 및 Kubernetes 접근 권한이 별도로 필요합니다.
 
-### Step 4. 초기화 및 코드 검증
+### Step 4. AWS 인프라 Terraform 초기화 및 검증
 
 작업 위치는 계속 `terraform/`입니다. `init`은 Provider와 모듈을 준비합니다.
 
@@ -114,7 +122,7 @@ terraform fmt -check -recursive
 terraform validate
 ```
 
-### Step 5. 변경 계획 확인
+### Step 5. AWS 인프라 변경 계획 확인
 
 현재 인증 계정과 `aws_region`, CIDR, 생성·교체·삭제 리소스를 검토합니다. 처음 배포하는 작업 공간이라면 많은 리소스가 생성 대상으로 나타납니다.
 
@@ -124,20 +132,26 @@ terraform plan -out=tfplan
 
 > **주의:** EKS, EC2, EBS, EIP 등은 비용이 발생할 수 있습니다. `plan` 결과에 예상하지 못한 삭제 또는 교체가 있으면 `apply` 전에 변수와 State를 확인하세요.
 
-### Step 6. 인프라 배포
+### Step 6. AWS 인프라 Terraform Apply
 
-검토한 저장 계획을 적용합니다.
+Git Bash에서 AWS 인프라 Terraform 작업 위치로 이동해 초기화, 검증, 변경 계획 확인 후 저장한 계획을 적용합니다. Step 4와 Step 5에서 이미 실행했다면 `init`과 `validate`를 다시 실행해도 됩니다. `plan` 결과를 검토한 뒤 `apply`하세요.
 
 ```bash
+cd /c/Avocado/terraform
+
+terraform init
+terraform validate
+terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-실행 후 루트 출력값을 확인합니다.
+첫 번째 `terraform apply`가 정상적으로 끝나면 AWS 인프라와 EKS 클러스터가 준비됩니다. **이 단계가 성공한 뒤에만 Bootstrap Terraform을 실행하세요.** 실행 후 루트 출력값을 확인합니다. EKS 클러스터 이름은 `terraform output -raw eks_cluster_name`으로 확인할 수 있습니다.
 
 ```bash
 terraform output
 terraform output aws_region
 terraform output eks_cluster_name
+terraform output -raw eks_cluster_name
 terraform output ecr_repository_urls
 ```
 
@@ -148,100 +162,77 @@ aws eks describe-cluster --region ap-northeast-2 --name coldguard-prod-eks --que
 aws ecr describe-repositories --region ap-northeast-2 --query 'repositories[].repositoryName'
 ```
 
-`terraform output`이 비어 있거나 AWS 조회가 실패하면 `apply`의 종료 결과, 현재 계정, 리전을 확인합니다. Kubernetes 매니페스트는 `kubernetes/`에 별도로 있으며 `terraform apply`가 적용하지 않습니다.
+`terraform output`이 비어 있거나 AWS 조회가 실패하면 `apply`의 종료 결과, 현재 계정, 리전을 확인합니다. AWS 인프라 Terraform은 `kubernetes/`의 매니페스트를 적용하지 않습니다. gp3 StorageClass와 Argo CD는 다음 Bootstrap Terraform에서 생성합니다.
 
-### Step 7. EKS 초기 설정 및 gp3 StorageClass 자동 적용
+### Step 7. Bootstrap Terraform 변수 설정
 
-Terraform은 EKS 클러스터와 EBS CSI Driver Add-on을 생성합니다. `gp3` StorageClass는 `kubernetes/storageclass-gp3.yaml`로 별도 관리하므로, `terraform apply` 후 다음 스크립트로 적용합니다. 작업 위치는 계속 `terraform/`입니다.
+AWS 인프라 Terraform의 첫 번째 Apply가 성공한 후 기존 EKS 클러스터 이름을 확인합니다. Bootstrap은 별도의 Terraform 실행 환경이며, 새로운 EKS 클러스터나 Worker Node를 만들지 않습니다.
 
-| 항목 | 요구 사항 |
+```bash
+cd /c/Avocado/terraform
+terraform output -raw eks_cluster_name
+```
+
+프로젝트 최상위의 Bootstrap 폴더 구성은 다음과 같습니다.
+
+```text
+Avocado/
+├── terraform/
+└── bootstrap/
+    ├── versions.tf
+    ├── provider.tf
+    ├── variables.tf
+    ├── main.tf
+    ├── outputs.tf
+    └── terraform.tfvars.example
+```
+
+두 Root Module의 변수 파일은 독립적으로 관리합니다. `terraform/terraform.tfvars`의 값은 `bootstrap/`으로 자동 전달되지 않습니다.
+
+| 파일 | 역할 |
 |---|---|
-| Terraform | 설치 및 `terraform apply` 완료 |
-| AWS CLI | 설치 및 배포한 AWS 계정으로 인증 완료 |
-| kubectl | 설치 필요 |
-| Git Bash | Bash 스크립트 실행 환경 |
-| EKS 접근 권한 | IAM 및 Kubernetes 접근 권한 필요 |
-| 공인 IP | 현재 PC의 출발지 공인 IP가 `eks_public_access_cidrs`에 허용되어 있어야 합니다. |
+| `terraform/terraform.tfvars` | AWS 인프라 변수 할당 |
+| `terraform/terraform.tfvars.example` | AWS 인프라 변수 예시 |
+| `bootstrap/terraform.tfvars` | Bootstrap 변수 할당 |
+| `bootstrap/terraform.tfvars.example` | Bootstrap 변수 예시 |
 
-`terraform apply`가 끝났더라도 현재 PC의 공인 IP가 허용되지 않으면 `kubectl` 접속이 실패할 수 있습니다. 실행 전 Git Bash에서 `kubectl version --client`로 설치를 확인하고, Step 3에서 설정한 IP와 현재 IP를 비교하세요.
+Bootstrap 예시 파일을 복사하여 `bootstrap/terraform.tfvars`를 편집합니다.
 
 ```bash
-kubectl version --client
-bash scripts/setup-eks.sh
+cd /c/Avocado/bootstrap
+cp terraform.tfvars.example terraform.tfvars
 ```
 
-스크립트는 다음 순서로 작업합니다.
+`aws_region`은 AWS 리전, `eks_cluster_name`은 연결할 기존 EKS 클러스터 이름, `argocd_chart_version`은 Argo CD Helm Chart 버전입니다. 앞의 두 변수는 필수이며, 차트 버전의 코드 기본값은 `10.15.0`입니다. 예시 설정은 다음과 같습니다. `eks_cluster_name`은 앞에서 확인한 AWS 인프라 Terraform의 출력값과 **정확히 일치**해야 합니다. 리전과 차트 버전도 실제 배포 환경 및 코드에 맞게 확인하세요.
 
-1. Terraform Output `eks_cluster_name`과 `aws_region`을 읽습니다.
-2. 현재 AWS 리전과 `aws sts get-caller-identity`의 인증 계정을 표시합니다.
-3. `aws eks update-kubeconfig`로 스크립트를 실행하는 환경의 kubeconfig에 클러스터 접속 정보를 등록합니다.
-4. 모든 EKS Worker Node가 Ready 상태가 될 때까지 기다립니다.
-5. `kube-system`의 `ebs-csi-controller` Deployment 준비 상태를 확인합니다.
-6. `kubectl apply -f kubernetes/storageclass-gp3.yaml`로 gp3 StorageClass를 적용합니다.
-7. `kubectl get storageclass gp3`로 생성 결과를 확인합니다.
+```hcl
+aws_region           = "ap-northeast-2"
+eks_cluster_name     = "coldguard-prod-eks"
+argocd_chart_version = "10.15.0"
+```
 
-`aws eks update-kubeconfig`는 클러스터를 생성하지 않고, 명령을 실행한 PC 또는 환경의 kubeconfig에 접속 정보를 등록합니다. 일반적으로 `terraform apply`만으로 로컬 kubeconfig가 등록되지는 않습니다. 이 프로젝트에서는 스크립트가 해당 명령을 실행하므로 스크립트 실행 전에 별도로 등록할 필요가 없습니다. 스크립트 실행 환경에는 AWS CLI 인증과 EKS API 접근 권한이 있어야 합니다.
+Bootstrap의 Kubernetes Provider와 Helm Provider는 기존 EKS의 엔드포인트와 인증서를 조회하고 AWS CLI의 `eks get-token`으로 Kubernetes API에 직접 연결합니다. 로컬 kubeconfig를 사용하지 않으므로 Bootstrap 실행 전에 `setup-eks.sh`를 실행할 필요가 없습니다. AWS CLI 설치와 계정 인증, EKS 내부 리소스 생성에 필요한 IAM·Kubernetes 권한, Step 3의 `eks_public_access_cidrs`에 허용된 공인 IP에서의 EKS Public API 접근은 필요합니다. 연결이 실패하면 출발지 IP와 인증 권한을 확인하세요.
 
-### Step 8. Argo CD 설치 및 접속
+### Step 8. Bootstrap Terraform 초기화 및 Apply
 
-`setup-eks.sh`가 성공적으로 끝난 뒤, 같은 Git Bash에서 `terraform/` 디렉터리를 작업 위치로 유지합니다. `install-argocd.sh`는 Terraform 출력값으로 EKS 클러스터와 리전을 확인하고, Helm 차트로 Argo CD를 `argocd` 네임스페이스에 설치합니다. 실행 전에 `helm version`으로 Helm 설치 여부를 확인합니다.
+작업 위치는 프로젝트 최상위의 `bootstrap/`입니다. AWS 인프라 생성과 EKS 준비가 완료된 뒤 실행합니다. 변경 계획에서 gp3 StorageClass와 Argo CD Helm Release가 생성되는지 확인한 뒤 적용합니다.
 
 ```bash
-helm version
-bash scripts/install-argocd.sh
+cd /c/Avocado/bootstrap
+
+terraform init
+terraform fmt -check -recursive
+terraform validate
+terraform plan -out=tfplan
+terraform apply tfplan
 ```
 
-설치 결과는 다음 명령으로 확인합니다.
+| 리소스 | 생성 방식 |
+|---|---|
+| gp3 StorageClass | Terraform Kubernetes Provider |
+| Argo CD 3.6.1 | Terraform Helm Provider (Helm Chart `10.15.0`) |
 
-```bash
-helm status argocd -n argocd
-kubectl get pods -n argocd
-kubectl get svc -n argocd
-```
-
-웹 UI에 접속하려면 별도의 Git Bash 창에서 포트 포워딩을 실행하고 `https://localhost:8080`을 엽니다. 사용자 이름은 `admin`이며, 초기 비밀번호는 아래 명령으로 확인합니다. 포트 포워딩 명령을 실행한 창은 접속하는 동안 열어 둡니다.
-
-```bash
-kubectl port-forward -n argocd svc/argocd-server 8080:443
-```
-
-```bash
-kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
-```
-
-### Step 9. 인프라 및 Kubernetes 구성 검증
-
-EKS를 관리하는 위치에 따라 kubeconfig가 필요한 곳이 달라집니다.
-
-| 관리 방식 | kubeconfig 설정 | 설명 |
-|---|---|---|
-| AWS Management Console | 불필요 | 클러스터, Node Group, Add-on 상태를 조회합니다. |
-| 로컬 PC의 kubectl | 필요 | Pod, Deployment, StorageClass 등 Kubernetes 리소스를 관리합니다. |
-| `setup-eks.sh` 자동화 스크립트 | 스크립트에서 자동 설정 | kubeconfig 등록부터 gp3 적용까지 실행합니다. |
-| AWS CloudShell | CloudShell 환경에서 설정 필요 | 로컬 PC의 kubeconfig 설정은 필요하지 않습니다. |
-| Argo CD 및 CI/CD | 로컬 PC에서는 불필요 | 배포 시스템 자체에 클러스터 접근 설정이 필요합니다. |
-
-**AWS 웹 콘솔에서 EKS 리소스 상태를 조회하는 것만으로는 로컬 kubeconfig 설정이 필요하지 않습니다.** 다만 gp3 StorageClass 적용에는 Kubernetes API 접근이 필요하며, `setup-eks.sh`가 kubeconfig 설정과 YAML 적용을 함께 처리합니다.
-
-스크립트 실행 후 EKS Node와 시스템 Pod, StorageClass를 확인합니다.
-
-```bash
-kubectl get nodes -o wide
-kubectl get pods -n kube-system
-kubectl get storageclass
-```
-
-AWS CLI에서 실제 Terraform Output을 사용해 Add-on을 확인할 수도 있습니다. 예시 변수값이라면 리전은 `ap-northeast-2`, 클러스터 이름은 `coldguard-prod-eks`이지만 배포값에 따라 달라집니다.
-
-```bash
-REGION="$(terraform output -raw aws_region)"
-CLUSTER_NAME="$(terraform output -raw eks_cluster_name)"
-aws eks list-addons \
-  --region "$REGION" \
-  --cluster-name "$CLUSTER_NAME"
-```
-
-`kubernetes/storageclass-gp3.yaml`의 실제 설정은 다음과 같습니다.
+gp3 StorageClass의 설정은 다음과 같습니다. 기존 `kubernetes/storageclass-gp3.yaml`은 참고용 매니페스트이며 현재 배포 단계에서 별도로 적용하지 않습니다.
 
 | 항목 | 설정값 | 의미 |
 |---|---|---|
@@ -252,43 +243,151 @@ aws eks list-addons \
 | 회수 정책 | `Delete` | 연결된 PVC 삭제 시 동적으로 생성된 볼륨을 삭제합니다. |
 | 확장 허용 | `true` | 볼륨 크기 확장을 허용합니다. |
 
-Terraform과 초기 설정 스크립트가 담당하는 작업 범위는 다음과 같습니다.
+Argo CD는 EKS Worker Node에서 Kubernetes Pod로 실행되며, AWS EKS Control Plane에 직접 설치되지 않습니다. Argo CD 서버 서비스는 `ClusterIP`이므로 외부 LoadBalancer를 생성하지 않습니다.
+
+### Step 9. 배포 결과 검증
+
+Bootstrap Terraform의 출력값으로 대상 클러스터, gp3 StorageClass 이름, Argo CD 네임스페이스 및 Helm Chart 버전을 확인합니다. 이 명령에는 로컬 kubeconfig가 필요하지 않습니다.
+
+```bash
+cd /c/Avocado/bootstrap
+terraform output
+```
+
+AWS CLI에서도 인프라 Terraform의 출력값을 사용해 EKS Add-on을 확인할 수 있습니다. 예시 리전과 클러스터 이름은 실제 배포값에 따라 달라집니다.
+
+```bash
+cd /c/Avocado/terraform
+REGION="$(terraform output -raw aws_region)"
+CLUSTER_NAME="$(terraform output -raw eks_cluster_name)"
+aws eks list-addons \
+  --region "$REGION" \
+  --cluster-name "$CLUSTER_NAME"
+```
+
+로컬 PC에서 Node, Argo CD Pod, gp3 StorageClass 및 실제 Argo CD 서버 이미지 버전을 직접 확인하려면 Step 10에 따라 `setup-eks.sh`로 로컬 연결을 설정한 뒤 `kubectl` 명령을 실행합니다.
+
+### Step 10. 로컬 EKS 연결 및 관리 (선택)
+
+AWS 인프라와 Bootstrap Terraform Apply, AWS 웹 콘솔에서 EKS 상태 조회에는 `setup-eks.sh`가 필요하지 않습니다. 로컬 PC에서 `kubectl`을 사용하거나 Argo CD 웹 UI에 로컬 포트 포워딩으로 접속하려면 kubeconfig 설정이 필요합니다.
+
+| 상황 | `setup-eks.sh` 필요 여부 |
+|---|---|
+| AWS 인프라 Terraform Apply | 불필요 |
+| Bootstrap Terraform Apply | 불필요 |
+| AWS 웹 콘솔에서 EKS 클러스터 상태 조회 | 불필요 |
+| 로컬 PC에서 `kubectl`로 EKS 접근 | kubeconfig 설정 필요 |
+| 스크립트를 이용한 로컬 접속 설정 및 검증 | 선택적으로 실행 |
+| Argo CD 웹 UI에 로컬 포트 포워딩으로 접근 | 로컬 `kubectl` 연결 필요 |
+
+`setup-eks.sh`는 인프라 Terraform 출력값에서 클러스터 이름과 리전을 읽고, AWS CLI 인증 계정을 표시한 뒤 `aws eks update-kubeconfig`로 로컬 kubeconfig를 등록합니다. 이어 Worker Node Ready 상태와 EBS CSI Driver 준비 상태를 확인합니다. gp3 StorageClass는 생성하지 않습니다.
+
+스크립트가 kubeconfig를 등록하므로 `aws eks update-kubeconfig`를 별도로 실행할 필요는 없습니다. 다만 AWS CLI 인증, EKS API 네트워크 접근 및 Kubernetes 권한이 필요합니다. VPN·프록시를 사용한다면 실제 출발지 공인 IP가 Step 3에서 허용한 IP와 같은지 확인하세요.
+
+Git Bash에서 `kubectl` 설치를 확인하고 스크립트를 실행합니다. 성공한 뒤 로컬에서 Kubernetes 리소스와 Argo CD 서버 이미지 버전을 확인합니다.
+
+```bash
+cd /c/Avocado/terraform
+kubectl version --client
+bash scripts/setup-eks.sh
+
+kubectl get nodes -o wide
+kubectl get pods -n argocd
+kubectl get storageclass gp3
+```
+
+```bash
+kubectl get deployment argocd-server \
+  -n argocd \
+  -o jsonpath='{.spec.template.spec.containers[0].image}'; echo
+```
+
+Argo CD 웹 UI에 접속하려면 별도의 Git Bash 창에서 다음 명령을 실행하고 `https://localhost:8080`을 엽니다. 접속하는 동안 포트 포워딩 창을 열어 두세요. 사용자 이름은 `admin`입니다.
+
+```bash
+kubectl port-forward \
+  -n argocd \
+  svc/argocd-server \
+  8080:443
+```
+
+초기 비밀번호는 로컬 `kubectl` 연결이 설정된 창에서 확인합니다.
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
+```
+
+Terraform은 ECR Repository를 만들지만 이미지를 빌드하거나 업로드하지 않습니다. 애플리케이션의 Kubernetes 배포와 운영 구성도 별도 작업입니다.
 
 | 작업 | 관리 도구 | 담당 영역 |
 |---|---|---|
-| VPC, Subnet, NAT, IAM, EKS, ECR 생성 | Terraform | IaC |
-| NAT 장애 전환 인프라 구성 | Terraform / Lambda | IaC |
-| EKS 초기 kubeconfig 등록 | `setup-eks.sh` / AWS CLI | IaC 초기 설정 |
-| gp3 StorageClass 적용 | `setup-eks.sh` / kubectl | IaC 초기 설정 |
+| VPC, Subnet, NAT, IAM, EKS, ECR 생성 | AWS 인프라 Terraform | IaC |
+| NAT 장애 전환 인프라 구성 | AWS 인프라 Terraform / Lambda | IaC |
+| gp3 StorageClass 적용 | Bootstrap Terraform / Kubernetes Provider | EKS 내부 구성 |
+| Argo CD 설치 | Bootstrap Terraform / Helm Provider | EKS 내부 구성 |
+| 로컬 kubeconfig 등록 및 EKS 상태 확인 | `setup-eks.sh` / AWS CLI / kubectl | 선택적 로컬 관리 |
 | ECR 컨테이너 이미지 Build 및 Push | Docker / GitHub Actions | CI/CD |
 | Kubernetes 애플리케이션 배포 | Helm / Argo CD / kubectl | CI/CD / Kubernetes |
 | 실제 서비스 운영 및 모니터링 | AWS Console / Kubernetes / Grafana | 운영 담당 |
 
-Terraform은 ECR Repository를 만들지만 이미지를 빌드하거나 업로드하지 않습니다. 애플리케이션의 Kubernetes 배포와 운영 구성도 별도 작업입니다.
+### Step 11. Terraform 변수 변경 적용
 
-### Step 10. 변수 변경 적용
-
-`terraform.tfvars`를 수정한 뒤 새 계획을 검토하고 적용합니다. 특히 CIDR, Subnet, 인스턴스 사양 및 EKS API 허용 CIDR의 영향은 [변수 및 설정 가이드](docs/variables/README.md)에 정리했습니다.
+AWS 인프라 변수는 `terraform/terraform.tfvars`, EKS 내부 구성 변수는 `bootstrap/terraform.tfvars`에서 각각 변경합니다. 특히 AWS 인프라의 CIDR, Subnet, 인스턴스 사양 및 EKS API 허용 CIDR의 영향은 [변수 및 설정 가이드](docs/variables/README.md)에 정리했습니다. 변경한 폴더의 State와 계획을 검토한 뒤 해당 폴더에서 적용하세요.
 
 ```bash
+cd /c/Avocado/terraform
 terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-### Step 11. 리소스 삭제
-
-삭제 계획을 먼저 확인하고 필요할 때 실행합니다.
+Bootstrap 변수를 변경한 경우에는 다음 명령을 사용합니다.
 
 ```bash
+cd /c/Avocado/bootstrap
+terraform plan -out=tfplan
+terraform apply tfplan
+```
+
+### Step 12. 리소스 삭제 (Bootstrap → AWS 인프라)
+
+두 Terraform State가 독립적이므로 생성 순서의 반대로 삭제합니다. **반드시 Bootstrap 리소스를 먼저 삭제하세요.** 삭제 계획을 확인한 뒤에만 `terraform destroy`를 실행합니다.
+
+#### Step 1. Bootstrap 리소스 삭제
+
+```bash
+cd /c/Avocado/bootstrap
+
 terraform plan -destroy
 terraform destroy
 ```
 
-> **주의:** 이 명령은 해당 State가 관리하는 인프라를 삭제합니다. 서비스 중단과 데이터 손실 가능성이 있습니다. ECR은 `force_delete = true`이므로 이미지가 있어도 Repository가 삭제될 수 있습니다. 콘솔에서 별도로 만든 리소스는 Terraform이 삭제하지 않을 수 있습니다.
+Argo CD Helm Release와 gp3 StorageClass를 삭제합니다.
+
+#### Step 2. AWS 인프라 삭제
+
+Bootstrap 삭제가 정상적으로 끝난 뒤 AWS 인프라 Terraform 폴더로 이동합니다.
+
+```bash
+cd /c/Avocado/terraform
+
+terraform plan -destroy
+terraform destroy
+```
+
+EKS, ECR, EC2, NAT, VPC 등 AWS 인프라를 삭제합니다. EKS를 먼저 삭제하면 Bootstrap Terraform이 Kubernetes API에 접속하지 못해 내부 리소스 삭제가 실패할 수 있습니다. 실제 PVC, EBS 볼륨 및 서비스 데이터가 있다면 삭제 전에 보존 여부를 확인하세요. Argo CD가 GitOps로 배포한 애플리케이션과 관련 AWS 리소스도 먼저 정리해야 할 수 있습니다. State 파일을 임의로 삭제하지 마세요.
+
+> **주의:** 삭제는 서비스 중단과 데이터 손실을 일으킬 수 있습니다. ECR은 `force_delete = true`이므로 이미지가 있어도 Repository가 삭제될 수 있습니다. 콘솔에서 별도로 만든 리소스는 Terraform이 삭제하지 않을 수 있습니다.
 
 ## State 관리
 
 `backend.tf`에는 원격 Backend 설정이 없습니다. 현재 구성은 기본 로컬 State를 사용합니다. `terraform.tfstate`, `terraform.tfstate.backup`, 저장된 계획 파일에는 민감한 정보가 포함될 수 있으므로 공유하거나 새로 커밋하지 마세요. 팀 작업 전에는 State 저장·잠금 방식을 합의하고, 동일한 State를 동시에 수정하지 않아야 합니다. 기존 State를 버리고 새 작업 공간에서 `apply`하면 기존 리소스와 충돌하거나 중복 생성될 수 있습니다.
+
+| State 위치 | 관리 대상 |
+|---|---|
+| `terraform/terraform.tfstate` | VPC, NAT, IAM, EKS, ECR 등 AWS 인프라 |
+| `bootstrap/terraform.tfstate` | gp3 StorageClass 및 Argo CD Helm Release |
+
+두 State는 독립적입니다. AWS 인프라 State가 Bootstrap State의 리소스를 자동으로 관리하지 않습니다. `.gitignore`는 두 폴더의 `terraform.tfvars`, `terraform.tfstate` 및 `tfplan` 실행 계획 파일을 GitHub 업로드 대상에서 제외합니다. 각 폴더의 State를 별도로 보관하고 백업하세요.
 
 ## 자주 발생하는 오류
 
@@ -302,7 +401,8 @@ terraform destroy
 | State 잠금 또는 기존 리소스 충돌 | 같은 State를 사용하는 다른 작업을 확인하고, 올바른 State·계정·리전인지 검토합니다. State 파일을 임의 삭제하지 마세요. |
 | EKS API 연결 시간 초과 또는 `kubectl` 연결 실패 | 현재 출발지 공인 IP가 `eks_public_access_cidrs`에 포함되는지, VPN·프록시 사용 여부와 클러스터 상태를 확인합니다. |
 | kubeconfig 인증 오류 또는 `Unauthorized` | `aws sts get-caller-identity`로 계정을 확인하고 IAM 및 Kubernetes 접근 권한을 검토한 뒤 `bash scripts/setup-eks.sh`를 다시 실행합니다. |
-| Node Ready 대기 또는 EBS CSI Driver 준비 실패 | `kubectl get nodes -o wide`, `kubectl get pods -n kube-system`, Add-on 상태를 확인합니다. 준비 실패 시 스크립트는 gp3 적용 전에 중단됩니다. |
-| gp3 StorageClass 적용 실패 | kubeconfig와 Kubernetes 권한, EBS CSI Driver 준비 상태 및 `kubernetes/storageclass-gp3.yaml` 경로를 확인합니다. |
+| Node Ready 대기 또는 EBS CSI Driver 준비 실패 | `kubectl get nodes -o wide`, `kubectl get pods -n kube-system`, Add-on 상태를 확인합니다. `setup-eks.sh`는 준비 확인 중 실패하면 중단됩니다. |
+| Bootstrap의 EKS API 연결 또는 인증 실패 | Bootstrap 변수의 클러스터 이름과 리전, 현재 공인 IP의 `eks_public_access_cidrs` 허용 여부, AWS CLI 인증 및 IAM·Kubernetes 권한을 확인합니다. |
+| gp3 StorageClass 또는 Argo CD 적용 실패 | `bootstrap/`의 `terraform plan`과 Provider 오류를 확인합니다. EBS CSI Driver 준비 상태, Kubernetes 권한 및 Helm Release 상태도 확인합니다. |
 
 검증 명령을 실행했다고 해서 AWS 배포 성공이 보장되지는 않습니다. NAT 장애 전환의 과거 시험 결과는 [검증 기록](ColdGuard_Validation_README.md)에 따로 정리되어 있습니다.

@@ -1,6 +1,11 @@
 # ColdGuard
 
-ColdGuard의 AWS 인프라와 EKS 내부 구성을 Terraform으로 생성하고 관리하는 방법입니다. `terraform/`은 VPC, NAT 및 라우터 EC2, 장애 전환, IAM, EKS, ECR을 관리하고, `terraform/bootstrap/`은 기존 EKS의 gp3 StorageClass와 Argo CD를 관리합니다. 두 폴더는 독립된 Terraform 실행 환경과 별도의 State를 사용합니다. Bootstrap은 EKS 클러스터나 Worker Node를 새로 생성하지 않습니다.
+ColdGuard의 AWS 인프라와 EKS 내부 구성을 Terraform으로 생성하고 관리하는 방법입니다. 최상위의 `terraform/`과 `bootstrap/`은 별도의 Terraform Root Module이며, 각각 독립적으로 실행하고 별도의 State를 사용합니다. Bootstrap은 EKS 클러스터나 Worker Node를 새로 생성하지 않습니다.
+
+| 디렉터리 | 관리 대상 | 주요 역할 |
+|---|---|---|
+| `terraform/` | AWS 인프라 | VPC, Subnet, NAT, 라우터 EC2, IAM, EKS, ECR 및 장애 전환 관련 AWS 리소스를 생성·관리합니다. |
+| `bootstrap/` | 기존 EKS 내부 리소스 | gp3 StorageClass를 생성하고 Helm으로 Argo CD를 설치합니다. |
 
 ## 문서 안내
 
@@ -168,10 +173,11 @@ cd /c/Avocado/terraform
 terraform output -raw eks_cluster_name
 ```
 
-Bootstrap 폴더의 구성은 다음과 같습니다.
+프로젝트 최상위의 Bootstrap 폴더 구성은 다음과 같습니다.
 
 ```text
-terraform/
+Avocado/
+├── terraform/
 └── bootstrap/
     ├── versions.tf
     ├── provider.tf
@@ -181,14 +187,23 @@ terraform/
     └── terraform.tfvars.example
 ```
 
-예시 파일을 복사하여 `bootstrap/terraform.tfvars`를 편집합니다.
+두 Root Module의 변수 파일은 독립적으로 관리합니다. `terraform/terraform.tfvars`의 값은 `bootstrap/`으로 자동 전달되지 않습니다.
+
+| 파일 | 역할 |
+|---|---|
+| `terraform/terraform.tfvars` | AWS 인프라 변수 할당 |
+| `terraform/terraform.tfvars.example` | AWS 인프라 변수 예시 |
+| `bootstrap/terraform.tfvars` | Bootstrap 변수 할당 |
+| `bootstrap/terraform.tfvars.example` | Bootstrap 변수 예시 |
+
+Bootstrap 예시 파일을 복사하여 `bootstrap/terraform.tfvars`를 편집합니다.
 
 ```bash
-cd /c/Avocado/terraform/bootstrap
+cd /c/Avocado/bootstrap
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-예시 설정은 다음과 같습니다. `eks_cluster_name`은 앞에서 확인한 AWS 인프라 Terraform의 출력값과 **정확히 일치**해야 합니다. 리전과 차트 버전도 실제 배포 환경 및 코드에 맞게 확인하세요.
+`aws_region`은 AWS 리전, `eks_cluster_name`은 연결할 기존 EKS 클러스터 이름, `argocd_chart_version`은 Argo CD Helm Chart 버전입니다. 앞의 두 변수는 필수이며, 차트 버전의 코드 기본값은 `10.15.0`입니다. 예시 설정은 다음과 같습니다. `eks_cluster_name`은 앞에서 확인한 AWS 인프라 Terraform의 출력값과 **정확히 일치**해야 합니다. 리전과 차트 버전도 실제 배포 환경 및 코드에 맞게 확인하세요.
 
 ```hcl
 aws_region           = "ap-northeast-2"
@@ -200,10 +215,10 @@ Bootstrap의 Kubernetes Provider와 Helm Provider는 기존 EKS의 엔드포인�
 
 ### Step 8. Bootstrap Terraform 초기화 및 Apply
 
-작업 위치는 `terraform/bootstrap/`입니다. 변경 계획에서 gp3 StorageClass와 Argo CD Helm Release가 생성되는지 확인한 뒤 적용합니다.
+작업 위치는 프로젝트 최상위의 `bootstrap/`입니다. AWS 인프라 생성과 EKS 준비가 완료된 뒤 실행합니다. 변경 계획에서 gp3 StorageClass와 Argo CD Helm Release가 생성되는지 확인한 뒤 적용합니다.
 
 ```bash
-cd /c/Avocado/terraform/bootstrap
+cd /c/Avocado/bootstrap
 
 terraform init
 terraform fmt -check -recursive
@@ -235,7 +250,7 @@ Argo CD는 EKS Worker Node에서 Kubernetes Pod로 실행되며, AWS EKS Control
 Bootstrap Terraform의 출력값으로 대상 클러스터, gp3 StorageClass 이름, Argo CD 네임스페이스 및 Helm Chart 버전을 확인합니다. 이 명령에는 로컬 kubeconfig가 필요하지 않습니다.
 
 ```bash
-cd /c/Avocado/terraform/bootstrap
+cd /c/Avocado/bootstrap
 terraform output
 ```
 
@@ -317,7 +332,7 @@ Terraform은 ECR Repository를 만들지만 이미지를 빌드하거나 업로�
 
 ### Step 11. Terraform 변수 변경 적용
 
-AWS 인프라 변수는 `terraform/terraform.tfvars`, EKS 내부 구성 변수는 `terraform/bootstrap/terraform.tfvars`에서 각각 변경합니다. 특히 AWS 인프라의 CIDR, Subnet, 인스턴스 사양 및 EKS API 허용 CIDR의 영향은 [변수 및 설정 가이드](docs/variables/README.md)에 정리했습니다. 변경한 폴더의 State와 계획을 검토한 뒤 해당 폴더에서 적용하세요.
+AWS 인프라 변수는 `terraform/terraform.tfvars`, EKS 내부 구성 변수는 `bootstrap/terraform.tfvars`에서 각각 변경합니다. 특히 AWS 인프라의 CIDR, Subnet, 인스턴스 사양 및 EKS API 허용 CIDR의 영향은 [변수 및 설정 가이드](docs/variables/README.md)에 정리했습니다. 변경한 폴더의 State와 계획을 검토한 뒤 해당 폴더에서 적용하세요.
 
 ```bash
 cd /c/Avocado/terraform
@@ -328,7 +343,7 @@ terraform apply tfplan
 Bootstrap 변수를 변경한 경우에는 다음 명령을 사용합니다.
 
 ```bash
-cd /c/Avocado/terraform/bootstrap
+cd /c/Avocado/bootstrap
 terraform plan -out=tfplan
 terraform apply tfplan
 ```
@@ -340,7 +355,7 @@ terraform apply tfplan
 #### Step 1. Bootstrap 리소스 삭제
 
 ```bash
-cd /c/Avocado/terraform/bootstrap
+cd /c/Avocado/bootstrap
 
 terraform plan -destroy
 terraform destroy
@@ -370,7 +385,7 @@ EKS, ECR, EC2, NAT, VPC 등 AWS 인프라를 삭제합니다. EKS를 먼저 삭�
 | State 위치 | 관리 대상 |
 |---|---|
 | `terraform/terraform.tfstate` | VPC, NAT, IAM, EKS, ECR 등 AWS 인프라 |
-| `terraform/bootstrap/terraform.tfstate` | gp3 StorageClass 및 Argo CD Helm Release |
+| `bootstrap/terraform.tfstate` | gp3 StorageClass 및 Argo CD Helm Release |
 
 두 State는 독립적입니다. AWS 인프라 State가 Bootstrap State의 리소스를 자동으로 관리하지 않습니다. `.gitignore`는 두 폴더의 `terraform.tfvars`, `terraform.tfstate` 및 `tfplan` 실행 계획 파일을 GitHub 업로드 대상에서 제외합니다. 각 폴더의 State를 별도로 보관하고 백업하세요.
 
@@ -388,6 +403,6 @@ EKS, ECR, EC2, NAT, VPC 등 AWS 인프라를 삭제합니다. EKS를 먼저 삭�
 | kubeconfig 인증 오류 또는 `Unauthorized` | `aws sts get-caller-identity`로 계정을 확인하고 IAM 및 Kubernetes 접근 권한을 검토한 뒤 `bash scripts/setup-eks.sh`를 다시 실행합니다. |
 | Node Ready 대기 또는 EBS CSI Driver 준비 실패 | `kubectl get nodes -o wide`, `kubectl get pods -n kube-system`, Add-on 상태를 확인합니다. `setup-eks.sh`는 준비 확인 중 실패하면 중단됩니다. |
 | Bootstrap의 EKS API 연결 또는 인증 실패 | Bootstrap 변수의 클러스터 이름과 리전, 현재 공인 IP의 `eks_public_access_cidrs` 허용 여부, AWS CLI 인증 및 IAM·Kubernetes 권한을 확인합니다. |
-| gp3 StorageClass 또는 Argo CD 적용 실패 | `terraform/bootstrap/`의 `terraform plan`과 Provider 오류를 확인합니다. EBS CSI Driver 준비 상태, Kubernetes 권한 및 Helm Release 상태도 확인합니다. |
+| gp3 StorageClass 또는 Argo CD 적용 실패 | `bootstrap/`의 `terraform plan`과 Provider 오류를 확인합니다. EBS CSI Driver 준비 상태, Kubernetes 권한 및 Helm Release 상태도 확인합니다. |
 
 검증 명령을 실행했다고 해서 AWS 배포 성공이 보장되지는 않습니다. NAT 장애 전환의 과거 시험 결과는 [검증 기록](ColdGuard_Validation_README.md)에 따로 정리되어 있습니다.
