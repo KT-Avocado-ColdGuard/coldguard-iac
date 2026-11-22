@@ -182,7 +182,34 @@ bash scripts/setup-eks.sh
 
 `aws eks update-kubeconfig`는 클러스터를 생성하지 않고, 명령을 실행한 PC 또는 환경의 kubeconfig에 접속 정보를 등록합니다. 일반적으로 `terraform apply`만으로 로컬 kubeconfig가 등록되지는 않습니다. 이 프로젝트에서는 스크립트가 해당 명령을 실행하므로 스크립트 실행 전에 별도로 등록할 필요가 없습니다. 스크립트 실행 환경에는 AWS CLI 인증과 EKS API 접근 권한이 있어야 합니다.
 
-### Step 8. 인프라 및 Kubernetes 구성 검증
+### Step 8. Argo CD 설치 및 접속
+
+`setup-eks.sh`가 성공적으로 끝난 뒤, 같은 Git Bash에서 `terraform/` 디렉터리를 작업 위치로 유지합니다. `install-argocd.sh`는 Terraform 출력값으로 EKS 클러스터와 리전을 확인하고, Helm 차트로 Argo CD를 `argocd` 네임스페이스에 설치합니다. 실행 전에 `helm version`으로 Helm 설치 여부를 확인합니다.
+
+```bash
+helm version
+bash scripts/install-argocd.sh
+```
+
+설치 결과는 다음 명령으로 확인합니다.
+
+```bash
+helm status argocd -n argocd
+kubectl get pods -n argocd
+kubectl get svc -n argocd
+```
+
+웹 UI에 접속하려면 별도의 Git Bash 창에서 포트 포워딩을 실행하고 `https://localhost:8080`을 엽니다. 사용자 이름은 `admin`이며, 초기 비밀번호는 아래 명령으로 확인합니다. 포트 포워딩 명령을 실행한 창은 접속하는 동안 열어 둡니다.
+
+```bash
+kubectl port-forward -n argocd svc/argocd-server 8080:443
+```
+
+```bash
+kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
+```
+
+### Step 9. 인프라 및 Kubernetes 구성 검증
 
 EKS를 관리하는 위치에 따라 kubeconfig가 필요한 곳이 달라집니다.
 
@@ -239,7 +266,7 @@ Terraform과 초기 설정 스크립트가 담당하는 작업 범위는 다음�
 
 Terraform은 ECR Repository를 만들지만 이미지를 빌드하거나 업로드하지 않습니다. 애플리케이션의 Kubernetes 배포와 운영 구성도 별도 작업입니다.
 
-### Step 9. 변수 변경 적용
+### Step 10. 변수 변경 적용
 
 `terraform.tfvars`를 수정한 뒤 새 계획을 검토하고 적용합니다. 특히 CIDR, Subnet, 인스턴스 사양 및 EKS API 허용 CIDR의 영향은 [변수 및 설정 가이드](docs/variables/README.md)에 정리했습니다.
 
@@ -248,7 +275,7 @@ terraform plan -out=tfplan
 terraform apply tfplan
 ```
 
-### Step 10. 리소스 삭제
+### Step 11. 리소스 삭제
 
 삭제 계획을 먼저 확인하고 필요할 때 실행합니다.
 

@@ -1,0 +1,16 @@
+
+# ==========================================
+# AWS Environment
+# ==========================================
+
+aws_region = "ap-northeast-2"
+
+# 기존 Terraform으로 생성한 EKS
+eks_cluster_name = "coldguard-prod-eks"
+
+# ==========================================
+# Argo CD
+# ==========================================
+
+# Argo CD v3.6.1
+argocd_chart_version = "10.15.0"
