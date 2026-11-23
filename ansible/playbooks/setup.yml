@@ -1,4 +1,8 @@
 ---
+# ==========================================
+# ColdGuard On-Premises Setup
+# ==========================================
+
 - name: ColdGuard On-Premises Setup
   hosts: onprem
   connection: local
@@ -13,3 +17,4 @@
     - common
     - tailscale
     - firewall
+    - k3s

@@ -1,0 +1,219 @@
+
+---
+# ==========================================
+# ColdGuard K3s Role
+# Ubuntu 24.04
+# ==========================================
+
+# ------------------------------------------
+# 0. Ansible 실행 사용자 자동 감지
+# ------------------------------------------
+
+- name: Detect local login user
+  ansible.builtin.command:
+    argv:
+      - id
+      - -un
+  become: false
+  register: k3s_login_user
+  changed_when: false
+
+- name: Set kubeconfig user
+  ansible.builtin.set_fact:
+    k3s_kubeconfig_user: "{{ k3s_login_user.stdout }}"
+
+
+# ------------------------------------------
+# 1. 설치 환경 확인
+# ------------------------------------------
+
+- name: Check K3s node IP
+  ansible.builtin.assert:
+    that:
+      - k3s_node_ip | length > 0
+      - k3s_node_ip != '127.0.0.1'
+    fail_msg: "Invalid K3s node IP."
+
+- name: Show K3s installation settings
+  ansible.builtin.debug:
+    msg:
+      - "K3s version: {{ k3s_version }}"
+      - "Node IP: {{ k3s_node_ip }}"
+      - "Pod CIDR: {{ k3s_cluster_cidr }}"
+      - "Service CIDR: {{ k3s_service_cidr }}"
+
+# ------------------------------------------
+# 2. IPv4 Forwarding 활성화
+# ------------------------------------------
+
+- name: Configure IPv4 forwarding
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/90-coldguard-k3s.conf
+    content: |
+      net.ipv4.ip_forward = 1
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Apply IPv4 forwarding
+  ansible.builtin.command:
+    argv:
+      - sysctl
+      - -p
+      - /etc/sysctl.d/90-coldguard-k3s.conf
+  changed_when: false
+
+# ------------------------------------------
+# 3. K3s 설정 파일 생성
+# ------------------------------------------
+
+- name: Create K3s configuration directory
+  ansible.builtin.file:
+    path: /etc/rancher/k3s
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Deploy K3s configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/rancher/k3s/config.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  register: k3s_config_result
+
+# ------------------------------------------
+# 4. K3s 설치
+# ------------------------------------------
+
+- name: Check K3s installation
+  ansible.builtin.stat:
+    path: /usr/local/bin/k3s
+  register: k3s_binary
+
+- name: Download official K3s installer
+  ansible.builtin.get_url:
+    url: https://get.k3s.io
+    dest: /tmp/coldguard-install-k3s.sh
+    mode: "0755"
+  when: not k3s_binary.stat.exists
+
+- name: Install K3s
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - /tmp/coldguard-install-k3s.sh
+  environment:
+    INSTALL_K3S_VERSION: "{{ k3s_version }}"
+    INSTALL_K3S_EXEC: "server"
+  when: not k3s_binary.stat.exists
+
+# ------------------------------------------
+# 5. K3s 서비스 시작
+# ------------------------------------------
+
+- name: Enable and start K3s
+  ansible.builtin.systemd_service:
+    name: k3s
+    enabled: true
+    state: started
+
+- name: Restart K3s if configuration changed
+  ansible.builtin.systemd_service:
+    name: k3s
+    state: restarted
+  when:
+    - k3s_binary.stat.exists
+    - k3s_config_result.changed
+
+# ------------------------------------------
+# 6. K3s 버전 검증
+# ------------------------------------------
+
+- name: Check installed K3s version
+  ansible.builtin.command:
+    argv:
+      - k3s
+      - --version
+  register: k3s_version_result
+  changed_when: false
+
+- name: Verify K3s version
+  ansible.builtin.assert:
+    that:
+      - k3s_version in k3s_version_result.stdout_lines[0]
+    fail_msg: >-
+      K3s version mismatch.
+      Expected: {{ k3s_version }}
+      Actual: {{ k3s_version_result.stdout_lines[0] }}
+
+# ------------------------------------------
+# 7. kubeconfig 설정
+# ------------------------------------------
+
+- name: Get kubeconfig user information
+  ansible.builtin.getent:
+    database: passwd
+    key: "{{ k3s_kubeconfig_user }}"
+
+- name: Set kubeconfig user home
+  ansible.builtin.set_fact:
+    k3s_user_home: >-
+      {{
+        ansible_facts.getent_passwd[k3s_kubeconfig_user][4]
+      }}
+
+- name: Create kubeconfig directory
+  ansible.builtin.file:
+    path: "{{ k3s_user_home }}/.kube"
+    state: directory
+    owner: "{{ k3s_kubeconfig_user }}"
+    group: "{{ k3s_kubeconfig_user }}"
+    mode: "0700"
+
+- name: Copy K3s kubeconfig
+  ansible.builtin.copy:
+    src: /etc/rancher/k3s/k3s.yaml
+    dest: "{{ k3s_user_home }}/.kube/config"
+    remote_src: true
+    owner: "{{ k3s_kubeconfig_user }}"
+    group: "{{ k3s_kubeconfig_user }}"
+    mode: "0600"
+
+# ------------------------------------------
+# 8. 설치 결과 검증
+# ------------------------------------------
+
+- name: Wait for K3s node Ready
+  ansible.builtin.command:
+    argv:
+      - k3s
+      - kubectl
+      - wait
+      - --for=condition=Ready
+      - nodes
+      - --all
+      - --timeout=15s
+  register: k3s_ready
+  retries: 12
+  delay: 10
+  until: k3s_ready.rc == 0
+  changed_when: false
+
+- name: Get K3s nodes
+  ansible.builtin.command:
+    argv:
+      - k3s
+      - kubectl
+      - get
+      - nodes
+      - -o
+      - wide
+  register: k3s_nodes
+  changed_when: false
+
+- name: Show K3s result
+  ansible.builtin.debug:
+    msg: "{{ k3s_nodes.stdout_lines }}"
