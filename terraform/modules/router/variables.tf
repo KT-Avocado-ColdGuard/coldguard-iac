@@ -33,3 +33,13 @@ variable "router_instance_profile_name" {
   description = "IAM Instance Profile name for Router EC2"
   type        = string
 }
+
+variable "private_route_table_ids" {
+  description = "Tailscale 경로를 추가할 Private Route Table ID"
+  type        = map(string)
+}
+
+variable "routed_cidrs" {
+  description = "서브넷 라우터로 보낼 목적지 CIDR"
+  type        = list(string)
+}

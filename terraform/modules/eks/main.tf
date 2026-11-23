@@ -6,7 +6,8 @@ resource "aws_eks_cluster" "main" {
   role_arn = var.cluster_role_arn
 
   access_config {
-    authentication_mode                         = "API_AND_CONFIG_MAP"
+    # aws-auth ConfigMap 없이 Access Entry로만 권한을 관리합니다.
+    authentication_mode                         = "API"
     bootstrap_cluster_creator_admin_permissions = true
   }
 
@@ -14,7 +15,10 @@ resource "aws_eks_cluster" "main" {
     subnet_ids = var.private_subnet_ids
 
     endpoint_private_access = true
-    endpoint_public_access  = true
+
+    # Tailscale로 private endpoint에 접속할 수 있게 되면 끕니다.
+    # 서브넷 라우터 장애 시 비상 접속용으로 다시 켤 수 있습니다.
+    endpoint_public_access = var.public_access_enabled
 
     public_access_cidrs = var.public_access_cidrs
   }
@@ -39,9 +43,9 @@ resource "aws_eks_node_group" "main" {
   capacity_type  = "ON_DEMAND"
 
   scaling_config {
-    desired_size = 3
-    min_size     = 3
-    max_size     = 3
+    desired_size = var.node_desired_size
+    min_size     = var.node_min_size
+    max_size     = var.node_max_size
   }
 
   update_config {
@@ -95,4 +99,61 @@ resource "aws_eks_addon" "ebs_csi" {
   depends_on = [
     aws_eks_addon.pod_identity_agent
   ]
+}
+
+
+# ============================================
+# 클러스터 관리자 (Access Entry)
+# ============================================
+# 클러스터를 만든 IAM 주체는 bootstrap_cluster_creator_admin_permissions로 이미 관리자입니다.
+# 같은 ARN을 이 목록에 넣으면 이미 존재한다는 오류가 납니다.
+resource "aws_eks_access_entry" "admin" {
+  for_each = toset(var.cluster_admin_arns)
+
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = each.value
+}
+
+resource "aws_eks_access_policy_association" "admin" {
+  for_each = toset(var.cluster_admin_arns)
+
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = each.value
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSClusterAdminPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.admin]
+}
+
+
+# ============================================
+# Pod Identity 연결 (ServiceAccount ↔ IAM Role)
+# ============================================
+resource "aws_eks_pod_identity_association" "app" {
+  for_each = var.pod_identity_associations
+
+  cluster_name    = aws_eks_cluster.main.name
+  namespace       = each.value.namespace
+  service_account = each.value.service_account
+  role_arn        = each.value.role_arn
+
+  depends_on = [aws_eks_addon.pod_identity_agent]
+}
+
+
+# ============================================
+# Tailscale 경유 private endpoint 접속
+# ============================================
+# 서브넷 라우터가 tailnet 트래픽을 자기 사설 IP로 SNAT하므로 라우터 SG에서 오는 443만 열면 됩니다.
+resource "aws_vpc_security_group_ingress_rule" "api_from_router" {
+  security_group_id = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+
+  description                  = "Kubernetes API from Tailscale subnet router"
+  referenced_security_group_id = var.router_sg_id
+  from_port                    = 443
+  to_port                      = 443
+  ip_protocol                  = "tcp"
 }

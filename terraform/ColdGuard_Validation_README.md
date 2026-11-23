@@ -77,8 +77,8 @@ aws ec2 describe-route-tables \
 
 | 구성 | RT ID | 고정 ENI |
 |---|---|---|
-| Private A / NAT-A | `rtb-01505756e10816004` | `eni-0ea0baaa485d8ecd9` |
-| Private C / NAT-C | `rtb-080c83c16e09037a0` | `eni-0a12bffddf2704fa6` |
+| Private A / NAT-A | `rtb-xxxxxxxx` | `eni-xxxxxxxx` |
+| Private C / NAT-C | `rtb-xxxxxxxx` | `eni-xxxxxxxx` |
 
 **반드시 현재 배포값을 먼저 조회하세요.**
 
@@ -96,7 +96,7 @@ curl -4 --max-time 10 https://checkip.amazonaws.com
 ping -c 4 8.8.8.8
 ```
 
-**기록된 시험 결과(이전 배포):** Failover 시 출구 IP `3.36.160.212`, Ping 4/4 수신·손실 0%. 이 IP는 이후 재배포 값과 다릅니다.
+**기록된 시험 결과(이전 배포):** Failover 시 출구 IP `<NAT-C EIP>`, Ping 4/4 수신·손실 0%. 이 IP는 이후 재배포 값과 다릅니다.
 
 ### NAT-A 수동 Failback
 
@@ -269,8 +269,8 @@ aws events put-rule \
 테스트 SQS Queue Policy는 EventBridge 서비스가 이 테스트 규칙의 ARN에서 발행한 메시지만 쓰도록 구성합니다. 실제 검증에서는 아래 ARN을 사용했습니다.
 
 ```text
-Rule:  arn:aws:events:ap-northeast-2:420653186933:rule/coldguard-eventbridge-dlq-test-rule
-Queue: arn:aws:sqs:ap-northeast-2:420653186933:coldguard-eventbridge-dlq-test
+Rule:  arn:aws:events:ap-northeast-2:<ACCOUNT_ID>:rule/coldguard-eventbridge-dlq-test-rule
+Queue: arn:aws:sqs:ap-northeast-2:<ACCOUNT_ID>:coldguard-eventbridge-dlq-test
 ```
 
 대상 JSON (`eventbridge-dlq-target.json`):
@@ -279,13 +279,13 @@ Queue: arn:aws:sqs:ap-northeast-2:420653186933:coldguard-eventbridge-dlq-test
 [
   {
     "Id": "DLQTestLambda",
-    "Arn": "arn:aws:lambda:ap-northeast-2:420653186933:function:coldguard-prod-nat-failover",
+    "Arn": "arn:aws:lambda:ap-northeast-2:<ACCOUNT_ID>:function:...",
     "RetryPolicy": {
       "MaximumRetryAttempts": 2,
       "MaximumEventAgeInSeconds": 3600
     },
     "DeadLetterConfig": {
-      "Arn": "arn:aws:sqs:ap-northeast-2:420653186933:coldguard-eventbridge-dlq-test"
+      "Arn": "arn:aws:sqs:ap-northeast-2:<ACCOUNT_ID>:coldguard-eventbridge-dlq-test"
     }
   }
 ]
@@ -342,7 +342,7 @@ aws events delete-rule \
 # 3. 테스트 전용 SQS 삭제 (메시지도 함께 삭제됨)
 aws sqs delete-queue \
   --region ap-northeast-2 \
-  --queue-url https://sqs.ap-northeast-2.amazonaws.com/420653186933/coldguard-eventbridge-dlq-test
+  --queue-url https://sqs.ap-northeast-2.amazonaws.com/<ACCOUNT_ID>/coldguard-eventbridge-dlq-test
 
 # 4. Git Bash 테스트 임시 파일 정리 (Terraform 프로젝트 경로에서 실행)
 rm -f eventbridge-dlq-policy.json eventbridge-dlq-attributes.json eventbridge-dlq-target.json throttle-result.json

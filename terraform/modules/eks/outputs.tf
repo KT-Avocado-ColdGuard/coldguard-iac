@@ -18,3 +18,8 @@ output "node_group_name" {
   description = "EKS Managed Node Group Name"
   value       = aws_eks_node_group.main.node_group_name
 }
+
+output "cluster_security_group_id" {
+  description = "EKS가 만든 클러스터 Security Group ID"
+  value       = aws_eks_cluster.main.vpc_config[0].cluster_security_group_id
+}

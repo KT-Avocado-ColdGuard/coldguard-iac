@@ -15,3 +15,12 @@ output "repository_names" {
     key => repo.name
   }
 }
+
+output "repository_arns" {
+  description = "ECR repository ARNs"
+
+  value = {
+    for key, repo in aws_ecr_repository.main :
+    key => repo.arn
+  }
+}

@@ -74,3 +74,8 @@ output "github_actions_role_arn" {
     aws_iam_role_policy.github_actions_ecr
   ]
 }
+
+output "backup_role_arn" {
+  description = "백업·이력 내보내기 CronJob Pod Identity Role ARN"
+  value       = aws_iam_role.backup.arn
+}

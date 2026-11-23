@@ -4,18 +4,18 @@ ColdGuard의 AWS 인프라와 EKS 내부 구성을 Terraform으로 생성하고 
 
 | 디렉터리 | 관리 대상 | 주요 역할 |
 |---|---|---|
-| `terraform/` | AWS 인프라 | VPC, Subnet, NAT, 라우터 EC2, IAM, EKS, ECR 및 장애 전환 관련 AWS 리소스를 생성·관리합니다. |
+| `terraform/` | AWS 인프라 | VPC, Subnet, NAT, 라우터 EC2, IAM, EKS, ECR, 백업 버킷, 알림 및 장애 전환 관련 AWS 리소스를 생성·관리합니다. |
 | `bootstrap/` | 기존 EKS 내부 리소스 | gp3 StorageClass를 생성하고 Helm으로 Argo CD를 설치합니다. |
 
 ## 문서 안내
 
 | 문서 | 목적 |
 |---|---|
-| [변수 및 설정 가이드](docs/variables/README.md) | 입력 변수, `terraform.tfvars` 작성 방법과 변경 영향 |
-| [프로젝트 구조 및 모듈 가이드](docs/structure/README.md) | 파일 구성, AWS 리소스, 모듈 연결 관계 |
+| [변수 및 설정 가이드](terraform/docs/variables/README.md) | 입력 변수, `terraform.tfvars` 작성 방법과 변경 영향 |
+| [프로젝트 구조 및 모듈 가이드](terraform/docs/structure/README.md) | 파일 구성, AWS 리소스, 모듈 연결 관계 |
 | [Terraform 사용 가이드](#terraform-사용-가이드) | 설치부터 AWS 인프라·Bootstrap 배포, 검증, 변경, 삭제까지의 작업 순서 |
 
-기존 [NAT 장애 전환 검증 기록](ColdGuard_Validation_README.md)은 실제 수행한 테스트 결과와 한계를 별도로 기록합니다.
+기존 [NAT 장애 전환 검증 기록](terraform/ColdGuard_Validation_README.md)은 실제 수행한 테스트 결과와 한계를 별도로 기록합니다.
 
 ## Terraform 사용 가이드
 
@@ -23,8 +23,7 @@ ColdGuard의 AWS 인프라와 EKS 내부 구성을 Terraform으로 생성하고 
 
 | 항목 | 요구 사항 |
 |---|---|
-| Terraform | `>= 1.0.0` (`versions.tf` 기준) |
-| Bootstrap Terraform | `>= 1.5.0` (`bootstrap/versions.tf` 기준) |
+| Terraform | `>= 1.10.0` (`terraform/versions.tf`, `bootstrap/versions.tf` 기준. S3 Backend 잠금 파일 기능에 필요) |
 | AWS Provider | `~> 6.0` (`terraform init`에서 설치) |
 | Archive Provider | `~> 2.0` (`terraform init`에서 설치) |
 | Kubernetes Provider | `~> 3.0` (`bootstrap/terraform init`에서 설치) |
@@ -55,12 +54,13 @@ aws sts get-caller-identity
 
 ### Step 2. GitHub 프로젝트 다운로드
 
-저장소 URL은 팀에서 제공받은 실제 URL로 지정합니다. 이미 코드를 받은 경우에는 `git clone`을 생략합니다. 다음 명령은 Git Bash 기준입니다.
+저장소 URL은 팀에서 제공받은 실제 URL로 지정합니다. 이미 코드를 받은 경우에는 `git clone`을 생략합니다. 다음 명령은 Git Bash 기준이며, 이 문서의 모든 경로는 저장소를 `C:\Avocado`에 받았다고 가정합니다. 다른 위치에 받았다면 `/c/Avocado` 부분을 실제 경로로 바꾸세요.
 
 ```bash
 REPOSITORY_URL="팀에서-제공받은-저장소-URL"
-git clone "$REPOSITORY_URL" avocado
-cd avocado/terraform
+cd /c
+git clone "$REPOSITORY_URL" Avocado
+cd /c/Avocado/terraform
 ```
 
 ### Step 3. Terraform 입력값 및 공인 IP 설정
@@ -71,7 +71,7 @@ cd avocado/terraform
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-예시 파일에는 `instances`와 `eks_public_access_cidrs`가 포함되어 있습니다. `owner`의 예시 팀 이름, 네트워크 대역, 인스턴스 구성 및 공인 IP를 자신의 환경에 맞게 바꾸세요. `subnets`에는 코드가 직접 참조하는 `private_a`, `private_c`가 필요하고, NAT 장애 전환에는 `nat_a`, `nat_c` 인스턴스 키가 필요합니다. 두 NAT 인스턴스의 `subnet`은 각각 존재하는 Public Subnet 키를 가리켜야 합니다. 상세 예시와 타입은 [변수 및 설정 가이드](docs/variables/README.md)를 참조합니다.
+예시 파일에는 필수 변수 10개가 모두 들어 있고, 선택 변수는 주석으로 적혀 있습니다. `owner`의 예시 팀 이름, 네트워크 대역, 인스턴스와 EKS 노드 구성, 공인 IP, GitHub 저장소를 자신의 환경에 맞게 바꾸세요. `subnets`에는 코드가 직접 참조하는 `private_a`, `private_c`가 필요하고, NAT 장애 전환에는 `nat_a`, `nat_c` 인스턴스 키가 필요합니다. 두 NAT 인스턴스의 `subnet`은 각각 존재하는 Public Subnet 키를 가리켜야 합니다. 상세 예시와 타입은 [변수 및 설정 가이드](terraform/docs/variables/README.md)를 참조합니다.
 
 #### 공인 IP 확인
 
@@ -107,9 +107,21 @@ eks_public_access_cidrs = ["203.0.113.10/32"]
 
 팀원이 각자의 AWS 계정에 배포한다면 각자 자신의 공인 IP를 설정해야 합니다. VPN이나 프록시를 사용하면 EKS API에 접속하는 출발지 공인 IP가 달라질 수 있으므로 해당 환경에서 확인하세요. `0.0.0.0/0`으로 모든 IP를 허용하지 마세요. 이 변수는 EKS Public API의 네트워크 접근만 제한하며 AWS 웹 콘솔 로그인 자체를 제한하지 않습니다. Public API 허용 IP에 들어 있더라도 IAM 및 Kubernetes 접근 권한이 별도로 필요합니다.
 
+#### 선택 변수
+
+다음 변수는 기본값이 있어 비워 둬도 동작합니다. 필요한 경우 `terraform.tfvars`에 추가합니다.
+
+| 변수 | 기본값 | 설명 |
+|---|---|---|
+| `eks_cluster_admin_arns` | `[]` | EKS 관리자 권한을 줄 IAM ARN. **apply하는 사람은 자동으로 관리자가 되므로 넣지 않습니다.** 같은 ARN을 넣으면 이미 존재한다는 오류가 납니다. |
+| `eks_public_access_enabled` | `true` | Tailscale로 private endpoint 접속을 확인한 뒤 `false`로 바꿉니다. 서브넷 라우터 장애 시 다시 `true`로 바꿔 비상 접속합니다. |
+| `alert_email` | `""` | AWS 내부 알림(NAT 장애 전환, Lambda 오류, KT 허브 상태)을 받을 이메일. apply 후 받은 메일에서 구독을 확인해야 알림이 옵니다. |
+| `router_routed_cidrs` | `["100.64.0.0/10"]` | Private Subnet에서 서브넷 라우터로 보낼 목적지. 온프렘 대역을 서브넷 라우터로 직접 받는다면 추가합니다. |
+| `backup_service_account` | `coldguard` / `s3-backup` | 백업 CronJob의 Namespace와 ServiceAccount. 매니페스트와 이름이 같아야 S3 권한을 받습니다. |
+
 ### Step 4. AWS 인프라 Terraform 초기화 및 검증
 
-작업 위치는 계속 `terraform/`입니다. `init`은 Provider와 모듈을 준비합니다.
+작업 위치는 계속 `terraform/`입니다. `init`은 Provider와 모듈을 준비하고 S3 Backend에 연결합니다. State 버킷이 먼저 있어야 합니다([State 관리](#state-관리) 참조).
 
 ```bash
 terraform init
@@ -155,6 +167,14 @@ terraform output -raw eks_cluster_name
 terraform output ecr_repository_urls
 ```
 
+#### apply 후 수동 작업
+
+| 작업 | 방법 |
+|---|---|
+| 알림 메일 구독 확인 | `alert_email`을 넣었다면 AWS에서 온 메일의 **Confirm subscription**을 누릅니다. 누르지 않으면 알림이 오지 않습니다. |
+| Grafana 액세스 키 발급 | IAM 콘솔에서 `terraform output grafana_user_name` 사용자의 액세스 키를 발급해 KT Grafana의 CloudWatch 데이터 소스에 넣습니다. 비밀값이 State에 남지 않도록 Terraform으로 만들지 않습니다. |
+| 서브넷 라우터 Tailscale 가입 | 라우터 SG에는 SSH가 열려 있지 않습니다. SSM Session Manager로 접속하거나 Ansible의 SSM 연결로 가입시키고, 광고한 경로(`10.80.0.0/16`)는 Tailscale 관리 콘솔에서 승인합니다. |
+
 AWS CLI에서도 현재 리전의 EKS Cluster와 ECR Repository를 조회할 수 있습니다. 예시 이름의 `coldguard-prod`는 실제 `name` 및 `environment` 값으로 바꿉니다.
 
 ```bash
@@ -162,7 +182,7 @@ aws eks describe-cluster --region ap-northeast-2 --name coldguard-prod-eks --que
 aws ecr describe-repositories --region ap-northeast-2 --query 'repositories[].repositoryName'
 ```
 
-`terraform output`이 비어 있거나 AWS 조회가 실패하면 `apply`의 종료 결과, 현재 계정, 리전을 확인합니다. AWS 인프라 Terraform은 `kubernetes/`의 매니페스트를 적용하지 않습니다. gp3 StorageClass와 Argo CD는 다음 Bootstrap Terraform에서 생성합니다.
+`terraform output`이 비어 있거나 AWS 조회가 실패하면 `apply`의 종료 결과, 현재 계정, 리전을 확인합니다. gp3 StorageClass와 Argo CD는 다음 Bootstrap Terraform에서 생성합니다.
 
 ### Step 7. Bootstrap Terraform 변수 설정
 
@@ -230,9 +250,9 @@ terraform apply tfplan
 | 리소스 | 생성 방식 |
 |---|---|
 | gp3 StorageClass | Terraform Kubernetes Provider |
-| Argo CD 3.6.1 | Terraform Helm Provider (Helm Chart `10.15.0`) |
+| Argo CD 3.6.1 | Terraform Helm Provider (Helm Chart `10.15.0`, 설정은 `bootstrap/values/argocd.yaml`) |
 
-gp3 StorageClass의 설정은 다음과 같습니다. 기존 `kubernetes/storageclass-gp3.yaml`은 참고용 매니페스트이며 현재 배포 단계에서 별도로 적용하지 않습니다.
+gp3 StorageClass의 설정은 다음과 같습니다.
 
 | 항목 | 설정값 | 의미 |
 |---|---|---|
@@ -244,6 +264,14 @@ gp3 StorageClass의 설정은 다음과 같습니다. 기존 `kubernetes/storage
 | 확장 허용 | `true` | 볼륨 크기 확장을 허용합니다. |
 
 Argo CD는 EKS Worker Node에서 Kubernetes Pod로 실행되며, AWS EKS Control Plane에 직접 설치되지 않습니다. Argo CD 서버 서비스는 `ClusterIP`이므로 외부 LoadBalancer를 생성하지 않습니다.
+
+| Argo CD 구성 | 설정 | 이유 |
+|---|---|---|
+| HA | 사용 안 함 | 노드 3대 규모에서는 과합니다. |
+| ApplicationSet | 컨트롤러 0개 | 시설별 구성은 Ansible로 찍어 냅니다. 차트가 컨트롤러를 항상 만들기 때문에 개수를 0으로 둡니다. |
+| Notifications | 사용 | 배포 결과를 Slack으로 보냅니다. Slack 토큰이 준비되면 values 파일의 주석을 풉니다. |
+| Dex | 사용 | GitHub 로그인용입니다. OAuth App이 준비되면 values 파일의 주석을 풉니다. |
+| Controller 지표 | 사용 | Prometheus Agent가 8082 지표를 수집합니다. |
 
 ### Step 9. 배포 결과 검증
 
@@ -317,6 +345,23 @@ kubectl port-forward \
 kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d; echo
 ```
 
+#### 테스트 매니페스트 (선택)
+
+`tests/`에는 배포 후 동작을 직접 확인할 때 쓰는 매니페스트가 있습니다. Terraform과 Bootstrap은 이 파일을 적용하지 않으며, 확인이 끝나면 삭제합니다.
+
+| 파일 | 확인 내용 |
+|---|---|
+| `tests/ebs-test.yaml` | gp3 StorageClass로 PVC가 만들어지고 Pod에 마운트되는지 확인합니다. |
+| `tests/nat-failover-test.yaml` | AZ A 노드의 Pod가 2초마다 외부 출구 IP를 출력합니다. NAT 장애 전환 중 출구 IP가 바뀌는지 확인합니다. |
+
+```bash
+cd /c/Avocado
+kubectl apply -f tests/ebs-test.yaml
+kubectl get pvc gp3-test-pvc
+kubectl exec gp3-test-pod -- cat /data/test.txt
+kubectl delete -f tests/ebs-test.yaml
+```
+
 Terraform은 ECR Repository를 만들지만 이미지를 빌드하거나 업로드하지 않습니다. 애플리케이션의 Kubernetes 배포와 운영 구성도 별도 작업입니다.
 
 | 작업 | 관리 도구 | 담당 영역 |
@@ -332,7 +377,7 @@ Terraform은 ECR Repository를 만들지만 이미지를 빌드하거나 업로�
 
 ### Step 11. Terraform 변수 변경 적용
 
-AWS 인프라 변수는 `terraform/terraform.tfvars`, EKS 내부 구성 변수는 `bootstrap/terraform.tfvars`에서 각각 변경합니다. 특히 AWS 인프라의 CIDR, Subnet, 인스턴스 사양 및 EKS API 허용 CIDR의 영향은 [변수 및 설정 가이드](docs/variables/README.md)에 정리했습니다. 변경한 폴더의 State와 계획을 검토한 뒤 해당 폴더에서 적용하세요.
+AWS 인프라 변수는 `terraform/terraform.tfvars`, EKS 내부 구성 변수는 `bootstrap/terraform.tfvars`에서 각각 변경합니다. 특히 AWS 인프라의 CIDR, Subnet, 인스턴스 사양 및 EKS API 허용 CIDR의 영향은 [변수 및 설정 가이드](terraform/docs/variables/README.md)에 정리했습니다. 변경한 폴더의 State와 계획을 검토한 뒤 해당 폴더에서 적용하세요.
 
 ```bash
 cd /c/Avocado/terraform
@@ -352,7 +397,7 @@ terraform apply tfplan
 
 두 Terraform State가 독립적이므로 생성 순서의 반대로 삭제합니다. **반드시 Bootstrap 리소스를 먼저 삭제하세요.** 삭제 계획을 확인한 뒤에만 `terraform destroy`를 실행합니다.
 
-#### Step 1. Bootstrap 리소스 삭제
+#### 12-1. Bootstrap 리소스 삭제
 
 ```bash
 cd /c/Avocado/bootstrap
@@ -363,7 +408,7 @@ terraform destroy
 
 Argo CD Helm Release와 gp3 StorageClass를 삭제합니다.
 
-#### Step 2. AWS 인프라 삭제
+#### 12-2. AWS 인프라 삭제
 
 Bootstrap 삭제가 정상적으로 끝난 뒤 AWS 인프라 Terraform 폴더로 이동합니다.
 
@@ -376,33 +421,74 @@ terraform destroy
 
 EKS, ECR, EC2, NAT, VPC 등 AWS 인프라를 삭제합니다. EKS를 먼저 삭제하면 Bootstrap Terraform이 Kubernetes API에 접속하지 못해 내부 리소스 삭제가 실패할 수 있습니다. 실제 PVC, EBS 볼륨 및 서비스 데이터가 있다면 삭제 전에 보존 여부를 확인하세요. Argo CD가 GitOps로 배포한 애플리케이션과 관련 AWS 리소스도 먼저 정리해야 할 수 있습니다. State 파일을 임의로 삭제하지 마세요.
 
-> **주의:** 삭제는 서비스 중단과 데이터 손실을 일으킬 수 있습니다. ECR은 `force_delete = true`이므로 이미지가 있어도 Repository가 삭제될 수 있습니다. 콘솔에서 별도로 만든 리소스는 Terraform이 삭제하지 않을 수 있습니다.
+> **주의:** 삭제는 서비스 중단과 데이터 손실을 일으킬 수 있습니다. ECR(`force_delete`)과 백업 버킷(`force_destroy`)은 안에 이미지나 객체가 남아 있어도 함께 삭제됩니다. 콘솔에서 별도로 만든 리소스는 Terraform이 삭제하지 않습니다.
+
+#### 12-3. State 버킷 삭제 (프로젝트 종료 시)
+
+State 버킷은 Terraform 밖에서 만들었으므로 마지막에 콘솔에서 직접 삭제합니다. 12-1과 12-2가 모두 끝난 뒤에만 진행합니다. 버전 관리가 켜져 있어 이전 버전까지 비워야 삭제할 수 있습니다.
+
+1. S3 콘솔에서 `coldguard-prod-tfstate-1q2w3e4r`를 선택하고 **비우기**를 실행합니다. 이전 버전도 함께 삭제됩니다.
+2. 비운 버킷을 **삭제**합니다.
+
+#### 12-4. 종료 정리 체크리스트
+
+Terraform 밖에서 만든 것은 직접 지워야 비용이 남지 않습니다.
+
+- [ ] 검증용으로 콘솔에서 만든 EventBridge 규칙, SQS, EC2, Security Group
+- [ ] CloudWatch Logs 로그 그룹 (`/aws/lambda/...`, EKS가 만든 로그 그룹)
+- [ ] EKS가 만든 EBS 볼륨 중 남은 것 (`kubernetes.io/created-for/pvc/name` 태그)
+- [ ] Tailscale 관리 콘솔의 장치(서브넷 라우터)와 auth key
+- [ ] State 버킷 (12-3)
 
 ## State 관리
 
-`backend.tf`에는 원격 Backend 설정이 없습니다. 현재 구성은 기본 로컬 State를 사용합니다. `terraform.tfstate`, `terraform.tfstate.backup`, 저장된 계획 파일에는 민감한 정보가 포함될 수 있으므로 공유하거나 새로 커밋하지 마세요. 팀 작업 전에는 State 저장·잠금 방식을 합의하고, 동일한 State를 동시에 수정하지 않아야 합니다. 기존 State를 버리고 새 작업 공간에서 `apply`하면 기존 리소스와 충돌하거나 중복 생성될 수 있습니다.
+State는 S3 버킷 `coldguard-prod-tfstate-1q2w3e4r`에 저장하고, 같은 버킷의 잠금 파일(`use_lockfile`)로 동시 실행을 막습니다. 누가 `plan`을 실행하든 같은 State를 보므로 PC마다 State가 갈라지지 않습니다.
 
-| State 위치 | 관리 대상 |
+| State 위치 (S3 key) | 관리 대상 |
 |---|---|
-| `terraform/terraform.tfstate` | VPC, NAT, IAM, EKS, ECR 등 AWS 인프라 |
+| `terraform/terraform.tfstate` | VPC, NAT, IAM, EKS, ECR, 백업 버킷, 알림 등 AWS 인프라 |
 | `bootstrap/terraform.tfstate` | gp3 StorageClass 및 Argo CD Helm Release |
 
-두 State는 독립적입니다. AWS 인프라 State가 Bootstrap State의 리소스를 자동으로 관리하지 않습니다. `.gitignore`는 두 폴더의 `terraform.tfvars`, `terraform.tfstate` 및 `tfplan` 실행 계획 파일을 GitHub 업로드 대상에서 제외합니다. 각 폴더의 State를 별도로 보관하고 백업하세요.
+두 State는 독립적입니다. AWS 인프라 State가 Bootstrap State의 리소스를 자동으로 관리하지 않습니다.
+
+### State 버킷 (최초 1회, 콘솔에서 생성)
+
+Terraform은 자기 State를 담는 버킷을 관리할 수 없으므로 이 버킷만 콘솔에서 만듭니다. `backend` 블록은 변수를 쓸 수 없어 버킷 이름을 `backend.tf`에 직접 적습니다. 그래서 계정 ID가 이름에 들어가지 않도록 글로벌 네임스페이스로 만들었습니다.
+
+| 항목 | 설정 |
+|---|---|
+| 리전 | `ap-northeast-2` |
+| 네임스페이스 | 글로벌 |
+| 객체 소유권 | ACL 비활성화 |
+| 퍼블릭 액세스 차단 | 4개 모두 차단 |
+| 버전 관리 | 활성화 (State가 깨졌을 때 이전 버전으로 복구) |
+| 기본 암호화 | SSE-S3, 버킷 키 비활성화 |
+| 객체 잠금 | 비활성화 |
+| 수명 주기 | 이전 버전 30일 후 삭제 |
+| 버킷 정책 | HTTPS가 아닌 요청 거부 |
+| 태그 | `Project=ColdGuard`, `Env=prod`, `ManagedBy=Manual` |
+
+### 주의
+
+- **apply는 한 사람만 합니다.** 잠금 파일이 동시 실행은 막지만, 서로 다른 브랜치의 코드로 번갈아 apply하면 리소스가 왔다 갔다 합니다. 다른 사람은 `plan`으로 확인만 합니다.
+- State에는 리소스 ID와 일부 설정값이 평문으로 들어 있습니다. 버킷 접근 권한을 넓히지 마세요.
+- 로컬에 남은 `terraform.tfstate`, `tfplan` 파일은 `.gitignore`로 제외됩니다. 커밋하지 마세요.
 
 ## 자주 발생하는 오류
 
 | 증상 | 확인 및 해결 |
 |---|---|
-| 필수 변수 입력 요청 또는 `No value for required variable` | `terraform.tfvars`에 9개 루트 변수가 모두 있는지 확인합니다. 예시 파일을 복사하고 환경별 값을 수정했는지 확인합니다. |
+| 필수 변수 입력 요청 또는 `No value for required variable` | `terraform.tfvars`에 필수 루트 변수 10개가 모두 있는지 확인합니다. 예시 파일을 복사하고 환경별 값을 수정했는지 확인합니다. |
 | `Invalid index` 또는 키 조회 오류 | `subnets`의 `private_a`·`private_c`, `instances`의 `nat_a`·`nat_c`, 인스턴스의 Public Subnet 참조를 확인합니다. |
 | AWS 인증·권한 오류 | `aws sts get-caller-identity`, `AWS_PROFILE`, IAM 권한과 계정 정책을 확인합니다. |
 | AZ/CIDR 충돌 | `aws_region`, Subnet AZ, VPC·Subnet CIDR의 포함 및 중복 여부를 확인합니다. |
 | Provider 설치 실패 | 네트워크 접근과 `terraform init` 결과를 확인합니다. |
-| State 잠금 또는 기존 리소스 충돌 | 같은 State를 사용하는 다른 작업을 확인하고, 올바른 State·계정·리전인지 검토합니다. State 파일을 임의 삭제하지 마세요. |
+| `Error acquiring the state lock` | 다른 사람이 `plan`이나 `apply`를 실행 중입니다. 끝날 때까지 기다립니다. 실행하던 사람의 작업이 비정상 종료되어 잠금이 남았다면, 그 사람과 확인한 뒤에만 `terraform force-unlock <LOCK_ID>`를 실행합니다. |
+| `init` 중 S3 접근 오류 | State 버킷 이름·리전, AWS 자격 증명과 S3 권한을 확인합니다. |
 | EKS API 연결 시간 초과 또는 `kubectl` 연결 실패 | 현재 출발지 공인 IP가 `eks_public_access_cidrs`에 포함되는지, VPN·프록시 사용 여부와 클러스터 상태를 확인합니다. |
 | kubeconfig 인증 오류 또는 `Unauthorized` | `aws sts get-caller-identity`로 계정을 확인하고 IAM 및 Kubernetes 접근 권한을 검토한 뒤 `bash scripts/setup-eks.sh`를 다시 실행합니다. |
 | Node Ready 대기 또는 EBS CSI Driver 준비 실패 | `kubectl get nodes -o wide`, `kubectl get pods -n kube-system`, Add-on 상태를 확인합니다. `setup-eks.sh`는 준비 확인 중 실패하면 중단됩니다. |
 | Bootstrap의 EKS API 연결 또는 인증 실패 | Bootstrap 변수의 클러스터 이름과 리전, 현재 공인 IP의 `eks_public_access_cidrs` 허용 여부, AWS CLI 인증 및 IAM·Kubernetes 권한을 확인합니다. |
 | gp3 StorageClass 또는 Argo CD 적용 실패 | `bootstrap/`의 `terraform plan`과 Provider 오류를 확인합니다. EBS CSI Driver 준비 상태, Kubernetes 권한 및 Helm Release 상태도 확인합니다. |
 
-검증 명령을 실행했다고 해서 AWS 배포 성공이 보장되지는 않습니다. NAT 장애 전환의 과거 시험 결과는 [검증 기록](ColdGuard_Validation_README.md)에 따로 정리되어 있습니다.
+검증 명령을 실행했다고 해서 AWS 배포 성공이 보장되지는 않습니다. NAT 장애 전환의 과거 시험 결과는 [검증 기록](terraform/ColdGuard_Validation_README.md)에 따로 정리되어 있습니다.

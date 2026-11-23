@@ -13,11 +13,6 @@ variable "nat_asg_names" {
   type        = map(string)
 }
 
-# AWS 리전
-variable "aws_region" {
-  description = "Lambda가 AWS 리소스를 관리할 리전"
-  type        = string
-}
 
 # Private Route Table ID
 variable "private_route_table_ids" {
@@ -33,5 +28,10 @@ variable "nat_eni_ids" {
 
 variable "lambda_role_arn" {
   description = "Failover Lambda IAM Role ARN"
+  type        = string
+}
+
+variable "alert_topic_arn" {
+  description = "알람을 보낼 공용 SNS 토픽 ARN"
   type        = string
 }

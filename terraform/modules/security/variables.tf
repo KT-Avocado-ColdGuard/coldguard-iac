@@ -14,9 +14,10 @@ variable "vpc_id" {
 }
 
 variable "vpc_cidr" {
-  description = "VPC CIDR"
+  description = "VPC CIDR (라우터 인바운드 허용 범위)"
   type        = string
 }
+
 
 variable "subnets" {
   description = "서브넷 정보"
