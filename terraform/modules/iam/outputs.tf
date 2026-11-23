@@ -63,3 +63,14 @@ output "eks_ebs_csi_role_arn" {
     aws_iam_role_policy_attachment.eks_ebs_csi
   ]
 }
+
+# GitHub Actions Role ARN
+output "github_actions_role_arn" {
+  description = "IAM Role ARN for GitHub Actions"
+
+  value = aws_iam_role.github_actions.arn
+
+  depends_on = [
+    aws_iam_role_policy.github_actions_ecr
+  ]
+}

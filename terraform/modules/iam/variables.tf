@@ -11,3 +11,15 @@ variable "private_route_table_ids" {
   description = "Failover Lambda가 변경할 Private Route Table ID"
   type        = map(string)
 }
+
+# GitHub Actions 저장소
+variable "github_repository" {
+  description = "GitHub repository (OWNER/REPO)"
+  type        = string
+}
+
+# GitHub Actions가 Push할 ECR Repository
+variable "ecr_repository_name" {
+  description = "ECR repository name for GitHub Actions"
+  type        = string
+}

@@ -1,0 +1,8 @@
+---
+- name: ColdGuard On-Premises Setup
+  hosts: onprem
+  become: true
+  gather_facts: true
+
+  roles:
+    - common

@@ -144,3 +144,6 @@ instances = {
 eks_public_access_cidrs = [
   "203.0.113.10/32"
 ]
+
+
+github_repository = "KT-Avocado-ColdGuard/coldguard-apps"

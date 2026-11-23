@@ -1,0 +1,55 @@
+---
+# ==========================================
+# ColdGuard Common Role
+# Ubuntu 24.04
+# ==========================================
+
+# Ubuntu 환경 확인
+- name: Check Ubuntu 24.04
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['distribution'] == "Ubuntu"
+      - ansible_facts['distribution_version'] is version('24.04', '>=')
+      - ansible_facts['distribution_version'] is version('24.10', '<')
+    fail_msg: "This Role supports Ubuntu 24.04 only."
+    success_msg: "Ubuntu 24.04 environment confirmed."
+
+# APT 패키지 목록 갱신
+- name: Update APT package cache
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+
+# 필수 패키지 설치
+- name: Install common packages
+  ansible.builtin.apt:
+    name:
+      - git
+      - buildah
+      - openssl
+      - mosquitto-clients
+      - curl
+      - ca-certificates
+      - ufw
+    state: present
+
+# 설치된 패키지 정보 확인
+- name: Gather installed package information
+  ansible.builtin.package_facts:
+    manager: auto
+
+# 필수 패키지 설치 검증
+- name: Verify required packages
+  ansible.builtin.assert:
+    that:
+      - item in ansible_facts.packages
+    fail_msg: "Package {{ item }} is not installed."
+    success_msg: "Package {{ item }} is installed."
+  loop:
+    - git
+    - buildah
+    - openssl
+    - mosquitto-clients
+    - curl
+    - ca-certificates
+    - ufw

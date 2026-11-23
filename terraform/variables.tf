@@ -58,3 +58,8 @@ variable "eks_public_access_cidrs" {
   description = "Allowed IPv4 CIDRs for EKS public API endpoint"
   type        = list(string)
 }
+
+variable "github_repository" {
+  description = "GitHub Actions repository"
+  type        = string
+}

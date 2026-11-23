@@ -27,6 +27,9 @@ module "iam" {
   name                    = var.name
   environment             = var.environment
   private_route_table_ids = module.network.private_route_table_ids
+
+  github_repository   = var.github_repository
+  ecr_repository_name = "${var.name}-${var.environment}-app"
 }
 
 #nat instance 생성 빠라라라라밤

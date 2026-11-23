@@ -1,5 +1,3 @@
-# Root outputs will be added when module outputs are defined.
-
 output "aws_region" {
   description = "AWS Region used for this deployment"
   value       = var.aws_region
@@ -26,4 +24,10 @@ output "eks_node_group_name" {
 output "ecr_repository_urls" {
   description = "ECR Repository URLs"
   value       = module.ecr.repository_urls
+}
+
+# GitHub Actions IAM Role ARN
+output "github_actions_role_arn" {
+  description = "GitHub Actions IAM Role ARN"
+  value       = module.iam.github_actions_role_arn
 }
