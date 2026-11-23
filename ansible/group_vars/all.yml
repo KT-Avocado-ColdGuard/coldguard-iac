@@ -6,3 +6,15 @@
 # Tailscale
 tailscale_version: "1.104.7"
 tailscale_snat_subnet_routes: false
+
+# UFW Firewall
+ufw_default_incoming: deny
+ufw_default_outgoing: allow
+ufw_default_routed: deny
+
+ufw_ssh_port: "22"
+ufw_tailscale_interface: "tailscale0"
+
+# K3s 네트워크
+ufw_k3s_pod_cidr: "10.42.0.0/16"
+ufw_k3s_service_cidr: "10.43.0.0/16"

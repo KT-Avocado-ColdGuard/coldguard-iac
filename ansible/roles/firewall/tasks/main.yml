@@ -1,0 +1,91 @@
+
+---
+# ==========================================
+# ColdGuard Firewall Role
+# Ubuntu 24.04
+# ==========================================
+
+# UFW 설치 여부 확인
+- name: Ensure UFW is installed
+  ansible.builtin.apt:
+    name: ufw
+    state: present
+
+# SSH 연결 허용
+- name: Allow SSH
+  community.general.ufw:
+    rule: allow
+    port: "{{ ufw_ssh_port }}"
+    proto: tcp
+    direction: in
+    comment: "Allow SSH"
+
+# Tailscale 인터페이스 전체 허용
+- name: Allow Tailscale interface
+  community.general.ufw:
+    rule: allow
+    interface: "{{ ufw_tailscale_interface }}"
+    direction: in
+    comment: "Allow Tailscale"
+
+# K3s Pod CIDR 허용
+- name: Allow K3s Pod network
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ ufw_k3s_pod_cidr }}"
+    direction: in
+    comment: "Allow K3s Pod network"
+
+# K3s Service CIDR 허용
+- name: Allow K3s Service network
+  community.general.ufw:
+    rule: allow
+    from_ip: "{{ ufw_k3s_service_cidr }}"
+    direction: in
+    comment: "Allow K3s Service network"
+
+# 기본 Incoming 차단
+- name: Set default incoming policy
+  community.general.ufw:
+    direction: incoming
+    policy: "{{ ufw_default_incoming }}"
+
+# 기본 Outgoing 허용
+- name: Set default outgoing policy
+  community.general.ufw:
+    direction: outgoing
+    policy: "{{ ufw_default_outgoing }}"
+
+# 기본 Routed 차단
+- name: Set default routed policy
+  community.general.ufw:
+    direction: routed
+    policy: "{{ ufw_default_routed }}"
+
+# 방화벽 활성화
+- name: Enable UFW
+  community.general.ufw:
+    state: enabled
+
+# 방화벽 상태 조회
+- name: Check UFW status
+  ansible.builtin.command:
+    argv:
+      - ufw
+      - status
+      - verbose
+  register: ufw_status
+  changed_when: false
+
+# 방화벽 활성화 여부 검증
+- name: Verify UFW is active
+  ansible.builtin.assert:
+    that:
+      - "'Status: active' in ufw_status.stdout"
+    fail_msg: "UFW is not active."
+    success_msg: "UFW is active."
+
+# 적용 결과 출력
+- name: Show UFW status
+  ansible.builtin.debug:
+    msg: "{{ ufw_status.stdout_lines }}"
