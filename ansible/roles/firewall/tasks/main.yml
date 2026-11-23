@@ -24,8 +24,7 @@
 - name: Allow Tailscale interface
   community.general.ufw:
     rule: allow
-    interface: "{{ ufw_tailscale_interface }}"
-    direction: in
+    interface_in: "{{ ufw_tailscale_interface }}"
     comment: "Allow Tailscale"
 
 # K3s Pod CIDR 허용
