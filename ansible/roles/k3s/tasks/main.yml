@@ -182,6 +182,17 @@
     group: "{{ k3s_kubeconfig_user }}"
     mode: "0600"
 
+# 일반 사용자의 kubectl kubeconfig 환경변수 설정
+- name: Configure KUBECONFIG for login user
+  ansible.builtin.blockinfile:
+    path: "{{ k3s_user_home }}/.bashrc"
+    create: true
+    owner: "{{ k3s_kubeconfig_user }}"
+    mode: "0644"
+    marker: "# {mark} ANSIBLE MANAGED K3S KUBECONFIG"
+    block: |
+      export KUBECONFIG="$HOME/.kube/config"
+
 # ------------------------------------------
 # 8. 설치 결과 검증
 # ------------------------------------------
