@@ -60,3 +60,6 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
+
+
+ansible/group_vars/vault.yml

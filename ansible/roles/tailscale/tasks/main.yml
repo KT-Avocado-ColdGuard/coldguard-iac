@@ -1,0 +1,200 @@
+---
+# ==========================================
+# ColdGuard Tailscale Role
+# Ubuntu 24.04
+# ==========================================
+
+# 공식 저장소 GPG Key
+- name: Add Tailscale GPG key
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.noarmor.gpg
+    dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+    mode: "0644"
+
+# 공식 APT 저장소
+- name: Add Tailscale repository
+  ansible.builtin.get_url:
+    url: https://pkgs.tailscale.com/stable/ubuntu/noble.tailscale-keyring.list
+    dest: /etc/apt/sources.list.d/tailscale.list
+    mode: "0644"
+
+# APT 캐시 업데이트
+- name: Update APT cache
+  ansible.builtin.apt:
+    update_cache: true
+
+# 설치 가능한 Tailscale 버전 확인
+- name: Check available Tailscale versions
+  ansible.builtin.command:
+    argv:
+      - apt-cache
+      - madison
+      - tailscale
+  register: tailscale_available
+  changed_when: false
+
+# 요구 버전에 맞는 APT 패키지 버전 선택
+- name: Select Tailscale package version
+  ansible.builtin.set_fact:
+    tailscale_package_versions: >-
+      {{
+        tailscale_available.stdout
+        | regex_findall('(?m)^\s*tailscale\s*\|\s*([^\s|]+)\s*\|')
+        | select('match', '^' ~ (tailscale_version | regex_escape) ~ '($|-)')
+        | list
+      }}
+
+# 요구 버전 존재 여부 검증
+- name: Verify required Tailscale version
+  ansible.builtin.assert:
+    that:
+      - tailscale_package_versions | length > 0
+    fail_msg: "Tailscale 1.104.7 is not available in the APT repository."
+
+# 지정 버전 설치
+- name: Install Tailscale
+  ansible.builtin.apt:
+    name: "tailscale={{ tailscale_package_versions[0] }}"
+    state: present
+    allow_downgrade: true
+
+# 데몬 시작 및 부팅 시 활성화
+- name: Enable and start tailscaled
+  ansible.builtin.systemd_service:
+    name: tailscaled
+    enabled: true
+    state: started
+
+# 현재 연결 상태 조회
+- name: Check Tailscale status
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - status
+      - --json
+  register: tailscale_status
+  changed_when: false
+
+# BackendState 추출
+- name: Read Tailscale backend state
+  ansible.builtin.set_fact:
+    tailscale_backend_state: >-
+      {{
+        (tailscale_status.stdout | from_json).BackendState
+        | default('Unknown')
+      }}
+
+# 미가입 또는 연결 중 상태 이외의 이상 상태 확인
+- name: Check authentication state
+  ansible.builtin.assert:
+    that:
+      - tailscale_backend_state in ['Running', 'NeedsLogin', 'NoState']
+    fail_msg: >-
+      Unexpected Tailscale state: {{ tailscale_backend_state }}.
+      Check tailscale status before retrying.
+
+# 최초 가입에 필요한 Auth Key 확인
+- name: Verify Tailscale Auth Key
+  ansible.builtin.assert:
+    that:
+      - tailscale_auth_key is defined
+      - tailscale_auth_key | length > 0
+    fail_msg: "Tailscale Auth Key is required."
+  when: tailscale_backend_state in ['NeedsLogin', 'NoState']
+  no_log: true
+
+# Auth Key를 임시 파일로 전달하여 가입
+- name: Authenticate with Tailscale
+  when: tailscale_backend_state in ['NeedsLogin', 'NoState']
+  block:
+    - name: Create temporary authentication file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .tailscale-auth
+      register: tailscale_auth_file
+      no_log: true
+
+    - name: Write authentication key
+      ansible.builtin.copy:
+        content: "{{ tailscale_auth_key }}"
+        dest: "{{ tailscale_auth_file.path }}"
+        mode: "0600"
+      no_log: true
+
+    - name: Join Tailnet
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - up
+          - "--auth-key=file:{{ tailscale_auth_file.path }}"
+          - "--snat-subnet-routes=false"
+      no_log: true
+
+  always:
+    - name: Remove temporary authentication file
+      ansible.builtin.file:
+        path: "{{ tailscale_auth_file.path }}"
+        state: absent
+      when: tailscale_auth_file.path is defined
+      no_log: true
+
+# 기존 가입 장치에도 SNAT 옵션 적용
+- name: Configure Tailscale SNAT
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - set
+      - "--snat-subnet-routes=false"
+  changed_when: false
+
+# 버전 확인
+- name: Check Tailscale version
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - version
+  register: tailscale_version_result
+  changed_when: false
+
+# Tailscale 설치 버전 검증
+- name: Verify installed Tailscale version
+  ansible.builtin.assert:
+    that:
+      - tailscale_version_result.stdout_lines[0] == tailscale_version
+    fail_msg: >-
+      Tailscale version mismatch.
+      Expected: {{ tailscale_version }},
+      Actual: {{ tailscale_version_result.stdout_lines[0] }}
+    success_msg: "Tailscale {{ tailscale_version }} verified."
+
+# 연결 검증
+- name: Verify Tailscale connection
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - status
+      - --json
+  register: tailscale_verify
+  changed_when: false
+
+- name: Assert Tailscale is running
+  ansible.builtin.assert:
+    that:
+      - (tailscale_verify.stdout | from_json).BackendState == 'Running'
+    fail_msg: "Tailscale is not connected."
+
+# 할당받은 IPv4 확인
+- name: Get Tailscale IPv4
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - ip
+      - -4
+  register: tailscale_ip
+  changed_when: false
+
+- name: Show Tailscale result
+  ansible.builtin.debug:
+    msg:
+      - "Tailscale version: {{ tailscale_version_result.stdout_lines[0] }}"
+      - "Tailscale IPv4: {{ tailscale_ip.stdout }}"
