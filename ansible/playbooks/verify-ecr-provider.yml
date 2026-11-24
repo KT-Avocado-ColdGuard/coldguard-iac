@@ -1,0 +1,117 @@
+---
+# ==========================================
+# ColdGuard ECR Credential Provider Test
+# Controller VM Only
+# ==========================================
+
+- name: Verify ECR Credential Provider
+  hosts: facility-01
+  gather_facts: false
+  become: false
+  
+  vars_files:
+    - ../group_vars/all.yml
+  
+  vars:
+    ecr_test_region: ap-northeast-2
+
+  tasks:
+
+    # 1. Vault 인증 정보 확인
+    - name: Check ECR credentials
+      ansible.builtin.assert:
+        that:
+          - ecr_access_key_id is defined
+          - ecr_secret_access_key is defined
+        quiet: true
+      no_log: true
+
+    # 2. 임시 인증 파일 디렉터리
+    - name: Create temporary credentials directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: coldguard-ecr
+      register: ecr_test_dir
+
+    - name: Run ECR Provider authentication test
+      block:
+
+        # 3. Vault 인증 정보를 임시 파일로 생성
+        - name: Create temporary AWS credentials
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../roles/k3s/templates/ecr-credentials.j2" 
+            dest: "{{ ecr_test_dir.path }}/credentials"
+            mode: "0600"
+          no_log: true
+
+        # 4. Credential Provider 직접 실행
+        - name: Verify Credential Provider auth response
+          ansible.builtin.command:
+            argv:
+              - python3
+              - -c
+              - |
+                import json
+                import subprocess
+
+                account = subprocess.run(
+                    [
+                        "aws", "sts", "get-caller-identity",
+                        "--query", "Account",
+                        "--output", "text"
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=30
+                ).stdout.strip()
+
+                request = {
+                    "apiVersion": "credentialprovider.kubelet.k8s.io/v1",
+                    "kind": "CredentialProviderRequest",
+                    "image": (
+                        f"{account}.dkr.ecr.ap-northeast-2.amazonaws.com/"
+                        "coldguard-prod-collector:test"
+                    )
+                }
+
+                result = subprocess.run(
+                    ["/tmp/ecr-credential-provider"],
+                    input=json.dumps(request),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=30
+                )
+
+                response = json.loads(result.stdout)
+                auth = response.get("auth", {})
+
+                assert auth, "No auth information returned"
+                assert any(
+                    v.get("username") and v.get("password")
+                    for v in auth.values()
+                ), "Incomplete registry credentials"
+
+                print("ECR Credential Provider auth: PASS")
+          environment:
+            AWS_SHARED_CREDENTIALS_FILE: "{{ ecr_test_dir.path }}/credentials"
+            AWS_CONFIG_FILE: /dev/null
+            AWS_EC2_METADATA_DISABLED: "true"
+            AWS_DEFAULT_REGION: "{{ ecr_test_region }}"
+          register: ecr_provider_test
+          changed_when: false
+          no_log: true
+
+        # 5. 성공 결과 출력
+        - name: Show authentication result
+          ansible.builtin.debug:
+            msg: "ECR Credential Provider auth: PASS"
+
+      always:
+        # 6. 임시 인증 파일 삭제
+        - name: Remove temporary credentials
+          ansible.builtin.file:
+            path: "{{ ecr_test_dir.path }}"
+            state: absent
+          no_log: true

@@ -75,3 +75,16 @@ ansible/group_vars/vault.yml
 *.csr
 *.pem
 *.patch
+
+# ==========================================
+# Ansible Vault
+# ==========================================
+
+# 모든 디렉터리의 vault.yml 제외
+vault.yml
+
+# Ansible 임시 파일
+*.retry
+*.log
+*.bak
+*.tmp
