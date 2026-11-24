@@ -142,6 +142,30 @@
 - name: Configure ECR Credential Provider
   ansible.builtin.import_tasks: ecr.yml
 
+# ------------------------------------------
+# ECR Credential Provider 파일 검증
+# ------------------------------------------
+
+- name: Verify ECR Provider files before K3s restart
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ ecr_provider_bin_dir }}/ecr-credential-provider"
+    - "{{ ecr_provider_config }}"
+    - "{{ ecr_credentials_file }}"
+  register: ecr_required_files
+
+- name: Assert ECR Provider files exist
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: "Required ECR Provider file is missing: {{ item.item }}"
+    quiet: true
+  loop: "{{ ecr_required_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
 
 # ------------------------------------------
 # 7. K3s 설정 파일 생성
