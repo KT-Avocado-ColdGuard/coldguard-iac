@@ -3,12 +3,13 @@
 # 구성 원칙
 #   - 단일 구성(HA 아님): 노드 3대 규모에서 HA는 과합니다.
 #   - ApplicationSet 끔: 시설별 구성은 Ansible로 찍어 내므로 쓰지 않습니다.
-#   - Notifications 켬: 배포 결과를 Slack으로 보냅니다.
-#   - Dex 켬: GitHub 로그인용입니다.
+#   - Dex 끔: GitHub 로그인은 쓰지 않습니다. 사람별 접근은 로컬 계정과 RBAC로 나눕니다.
+#   - 화면 접속: Tailscale Ingress(coldguard-gitops infra/aws)가 TLS를 처리하므로 서버는 HTTP로 둡니다.
+#   - 알림: 배포 결과를 Discord Webhook으로 보냅니다.
 
 server:
   service:
-    # 외부 LoadBalancer 없이 port-forward 또는 Tailscale로만 접속합니다.
+    # 외부 LoadBalancer 없이 Tailscale로만 접속합니다.
     type: ClusterIP
 
 # 이 차트는 ApplicationSet 컨트롤러를 항상 만들므로 0개로 실행해 끕니다.
@@ -20,29 +21,80 @@ controller:
   metrics:
     enabled: true
 
+dex:
+  enabled: false
+
+configs:
+  params:
+    # TLS는 Tailscale Ingress 프록시가 처리합니다.
+    server.insecure: true
+
+  cm:
+    # 조회 전용 로컬 계정 (CI/CD 담당). 비밀번호는 설치 후 argocd CLI로 정합니다.
+    accounts.cicd: login
+
+  rbac:
+    # 계정에 역할이 없으면 아무 권한도 주지 않습니다.
+    policy.default: ""
+    policy.csv: |
+      g, cicd, role:readonly
+
 notifications:
   enabled: true
-  # Slack 토큰이 준비되면 argocd-notifications-secret의 slack-token 키에 넣고 아래 주석을 풉니다.
-  # notifiers:
-  #   service.slack: |
-  #     token: $slack-token
 
-dex:
-  enabled: true
+  # Webhook URL은 Git과 Terraform State에 남지 않도록 차트가 Secret을 만들지 않게 하고,
+  # argocd-notifications-secret을 kubectl로 직접 만듭니다(discord-webhook-url 키).
+  secret:
+    create: false
 
-# GitHub 로그인
-# OAuth App의 Client Secret은 argocd-secret의 dex.github.clientSecret 키에 넣습니다.
-# 값이 준비되면 아래 주석을 풀고 url과 clientID, orgs를 채웁니다.
-# configs:
-#   cm:
-#     url: https://<Argo CD 접속 주소>
-#     dex.config: |
-#       connectors:
-#         - type: github
-#           id: github
-#           name: GitHub
-#           config:
-#             clientID: <OAuth App Client ID>
-#             clientSecret: $dex.github.clientSecret
-#             orgs:
-#               - name: KT-Avocado-ColdGuard
+  notifiers:
+    service.webhook.discord: |
+      url: $discord-webhook-url
+      headers:
+        - name: Content-Type
+          value: application/json
+
+  templates:
+    template.app-deployed: |
+      webhook:
+        discord:
+          method: POST
+          body: |
+            {"content": {{ printf "[배포 완료] %s\n상태: %s / %s\n리비전: %s\n이미지: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.sync.status .app.status.health.status .app.status.sync.revision (join ", " .app.status.summary.images) .context.argocdUrl .app.metadata.name | toJson }}}
+    template.app-sync-failed: |
+      webhook:
+        discord:
+          method: POST
+          body: |
+            {"content": {{ printf "[배포 실패] %s\n리비전: %s\n사유: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.sync.revision .app.status.operationState.message .context.argocdUrl .app.metadata.name | toJson }}}
+    template.app-health-degraded: |
+      webhook:
+        discord:
+          method: POST
+          body: |
+            {"content": {{ printf "[상태 이상] %s\n상태: %s\n이미지: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.health.status (join ", " .app.status.summary.images) .context.argocdUrl .app.metadata.name | toJson }}}
+
+  triggers:
+    # 동기화가 끝나고 Healthy가 됐을 때 커밋마다 한 번
+    trigger.on-deployed: |
+      - description: Application is synced and healthy. Triggered once per commit.
+        oncePer: app.status.operationState?.syncResult?.revision
+        send: [app-deployed]
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Succeeded'] and app.status.health.status == 'Healthy'
+    trigger.on-sync-failed: |
+      - description: Application syncing has failed
+        send: [app-sync-failed]
+        when: app.status.operationState != nil and app.status.operationState.phase in ['Error', 'Failed']
+    trigger.on-health-degraded: |
+      - description: Application has degraded
+        send: [app-health-degraded]
+        when: app.status.health.status == 'Degraded'
+
+  # 모든 Application에 적용합니다.
+  subscriptions:
+    - recipients:
+        - discord
+      triggers:
+        - on-deployed
+        - on-sync-failed
+        - on-health-degraded

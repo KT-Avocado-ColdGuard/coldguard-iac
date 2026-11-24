@@ -114,9 +114,10 @@ eks_public_access_cidrs = ["203.0.113.10/32"]
 | 변수 | 기본값 | 설명 |
 |---|---|---|
 | `eks_cluster_admin_arns` | `[]` | EKS 관리자 권한을 줄 IAM ARN. **apply하는 사람은 자동으로 관리자가 되므로 넣지 않습니다.** 같은 ARN을 넣으면 이미 존재한다는 오류가 납니다. |
+| `eks_cluster_viewer_arns` | `[]` | EKS 조회 전용 권한(`AmazonEKSViewPolicy`)을 줄 IAM ARN. Secret 값은 볼 수 없습니다. IAM Identity Center 역할은 IAM 콘솔의 ARN을 경로까지 그대로 넣습니다. |
 | `eks_public_access_enabled` | `true` | Tailscale로 private endpoint 접속을 확인한 뒤 `false`로 바꿉니다. 서브넷 라우터 장애 시 다시 `true`로 바꿔 비상 접속합니다. |
 | `alert_email` | `""` | AWS 내부 알림(NAT 장애 전환, Lambda 오류, KT 허브 상태)을 받을 이메일. apply 후 받은 메일에서 구독을 확인해야 알림이 옵니다. |
-| `router_routed_cidrs` | `["100.64.0.0/10"]` | Private Subnet에서 서브넷 라우터로 보낼 목적지. 온프렘 대역을 서브넷 라우터로 직접 받는다면 추가합니다. |
+| `router_routed_cidrs` | `[]` | Private Subnet에서 서브넷 라우터로 보낼 목적지. VPC 안에서 tailnet으로 직접 나가야 할 때만 넣습니다. EKS는 Tailscale operator egress를 씁니다. |
 | `backup_service_account` | `coldguard` / `s3-backup` | 백업 CronJob의 Namespace와 ServiceAccount. 매니페스트와 이름이 같아야 S3 권한을 받습니다. |
 
 ### Step 4. AWS 인프라 Terraform 초기화 및 검증
@@ -172,6 +173,7 @@ terraform output ecr_repository_urls
 | 작업 | 방법 |
 |---|---|
 | 알림 메일 구독 확인 | `alert_email`을 넣었다면 AWS에서 온 메일의 **Confirm subscription**을 누릅니다. 누르지 않으면 알림이 오지 않습니다. |
+| 시설 ECR Pull 액세스 키 발급 | IAM 콘솔에서 `terraform output onprem_ecr_pull_user_names`의 시설별 사용자마다 액세스 키를 발급해 해당 시설 Ansible vault에 넣습니다. 시설 K3s의 `ecr-credential-provider`가 이 키로 ECR 토큰을 받습니다. |
 | Grafana 액세스 키 발급 | IAM 콘솔에서 `terraform output grafana_user_name` 사용자의 액세스 키를 발급해 KT Grafana의 CloudWatch 데이터 소스에 넣습니다. 비밀값이 State에 남지 않도록 Terraform으로 만들지 않습니다. |
 | 서브넷 라우터 Tailscale 가입 | 라우터 SG에는 SSH가 열려 있지 않습니다. SSM Session Manager로 접속하거나 Ansible의 SSM 연결로 가입시키고, 광고한 경로(`10.80.0.0/16`)는 Tailscale 관리 콘솔에서 승인합니다. |
 
@@ -204,7 +206,12 @@ Avocado/
     ├── variables.tf
     ├── main.tf
     ├── outputs.tf
-    └── terraform.tfvars.example
+    ├── terraform.tfvars.example
+    ├── values/
+    │   ├── argocd.yaml               # Argo CD 설정 (조회 계정, Discord 알림)
+    │   └── tailscale-operator.yaml   # Tailscale operator 설정
+    └── charts/
+        └── root-app/                 # coldguard-gitops/argocd를 바라보는 루트 Application
 ```
 
 두 Root Module의 변수 파일은 독립적으로 관리합니다. `terraform/terraform.tfvars`의 값은 `bootstrap/`으로 자동 전달되지 않습니다.
@@ -223,7 +230,7 @@ cd /c/Avocado/bootstrap
 cp terraform.tfvars.example terraform.tfvars
 ```
 
-`aws_region`은 AWS 리전, `eks_cluster_name`은 연결할 기존 EKS 클러스터 이름, `argocd_chart_version`은 Argo CD Helm Chart 버전입니다. 앞의 두 변수는 필수이며, 차트 버전의 코드 기본값은 `10.15.0`입니다. 예시 설정은 다음과 같습니다. `eks_cluster_name`은 앞에서 확인한 AWS 인프라 Terraform의 출력값과 **정확히 일치**해야 합니다. 리전과 차트 버전도 실제 배포 환경 및 코드에 맞게 확인하세요.
+`aws_region`은 AWS 리전, `eks_cluster_name`은 연결할 기존 EKS 클러스터 이름, `argocd_chart_version`은 Argo CD Helm Chart 버전입니다. 앞의 두 변수는 필수이며, 차트 버전의 코드 기본값은 `10.15.0`입니다. 나머지 선택 변수(`argocd_url`, `tailscale_operator_enabled`, `gitops_root_app_enabled` 등)는 Step 8의 순서에 따라 바꿉니다. 예시 설정은 다음과 같습니다. `eks_cluster_name`은 앞에서 확인한 AWS 인프라 Terraform의 출력값과 **정확히 일치**해야 합니다. 리전과 차트 버전도 실제 배포 환경 및 코드에 맞게 확인하세요.
 
 ```hcl
 aws_region           = "ap-northeast-2"
@@ -231,7 +238,7 @@ eks_cluster_name     = "coldguard-prod-eks"
 argocd_chart_version = "10.15.0"
 ```
 
-Bootstrap의 Kubernetes Provider와 Helm Provider는 기존 EKS의 엔드포인트와 인증서를 조회하고 AWS CLI의 `eks get-token`으로 Kubernetes API에 직접 연결합니다. 로컬 kubeconfig를 사용하지 않으므로 Bootstrap 실행 전에 `setup-eks.sh`를 실행할 필요가 없습니다. AWS CLI 설치와 계정 인증, EKS 내부 리소스 생성에 필요한 IAM·Kubernetes 권한, Step 3의 `eks_public_access_cidrs`에 허용된 공인 IP에서의 EKS Public API 접근은 필요합니다. 연결이 실패하면 출발지 IP와 인증 권한을 확인하세요.
+Bootstrap의 Kubernetes Provider와 Helm Provider는 기존 EKS의 엔드포인트와 인증서를 조회하고 AWS CLI의 `eks get-token`으로 Kubernetes API에 직접 연결합니다. 로컬 kubeconfig를 사용하지 않으므로 Bootstrap 실행 전에 `setup-eks.sh`를 실행할 필요가 없습니다. AWS CLI 설치와 계정 인증, EKS 내부 리소스 생성에 필요한 IAM·Kubernetes 권한, EKS API 접근 경로는 필요합니다. `eks_public_access_enabled = false`이면 PC가 Tailscale에 연결되어 서브넷 라우터 경로(`10.80.0.0/16`)를 받아야 하고, `true`이면 Step 3의 `eks_public_access_cidrs`에 허용된 공인 IP에서 실행해야 합니다. 연결이 실패하면 Tailscale 연결과 출발지 IP, 인증 권한을 확인하세요.
 
 ### Step 8. Bootstrap Terraform 초기화 및 Apply
 
@@ -251,6 +258,8 @@ terraform apply tfplan
 |---|---|
 | gp3 StorageClass | Terraform Kubernetes Provider |
 | Argo CD 3.6.1 | Terraform Helm Provider (Helm Chart `10.15.0`, 설정은 `bootstrap/values/argocd.yaml`) |
+| Tailscale operator | Terraform Helm Provider (`tailscale_operator_enabled = true`일 때, 설정은 `bootstrap/values/tailscale-operator.yaml`) |
+| 루트 Application | Terraform Helm Provider, 로컬 차트 `bootstrap/charts/root-app` (`gitops_root_app_enabled = true`일 때) |
 
 gp3 StorageClass의 설정은 다음과 같습니다.
 
@@ -269,9 +278,45 @@ Argo CD는 EKS Worker Node에서 Kubernetes Pod로 실행되며, AWS EKS Control
 |---|---|---|
 | HA | 사용 안 함 | 노드 3대 규모에서는 과합니다. |
 | ApplicationSet | 컨트롤러 0개 | 시설별 구성은 Ansible로 찍어 냅니다. 차트가 컨트롤러를 항상 만들기 때문에 개수를 0으로 둡니다. |
-| Notifications | 사용 | 배포 결과를 Slack으로 보냅니다. Slack 토큰이 준비되면 values 파일의 주석을 풉니다. |
-| Dex | 사용 | GitHub 로그인용입니다. OAuth App이 준비되면 values 파일의 주석을 풉니다. |
+| Notifications | 사용 | 배포 완료·실패·상태 이상을 Discord Webhook으로 보냅니다. Webhook URL은 Secret으로 직접 넣습니다. |
+| Dex | 사용 안 함 | GitHub 로그인은 쓰지 않습니다. |
+| 조회 계정 | `cicd` (`role:readonly`) | CI/CD 담당의 배포 결과 확인용입니다. 기본 정책은 권한 없음입니다. |
+| 서버 TLS | 끔 (`server.insecure`) | 화면 접속은 Tailscale Ingress가 TLS를 처리합니다. |
 | Controller 지표 | 사용 | Prometheus Agent가 8082 지표를 수집합니다. |
+
+#### 추가 구성 순서
+
+비밀값은 Git과 Terraform State에 남지 않도록 `kubectl`로 직접 만들고, 그 뒤 변수를 켜서 다시 apply합니다.
+
+1. **Discord 알림**: Webhook URL을 Secret으로 넣고 notifications 컨트롤러를 재시작합니다.
+
+   ```bash
+   kubectl -n argocd create secret generic argocd-notifications-secret \
+     --from-literal=discord-webhook-url='<Webhook URL>'
+   kubectl -n argocd rollout restart deploy/argocd-notifications-controller
+   ```
+
+2. **Tailscale operator**: Tailscale ACL에 `tag:k8s-operator`가 있고 OAuth client(General/Services, Devices/Core, Keys/Auth Keys 쓰기, 태그 `tag:k8s-operator`)가 준비된 뒤 진행합니다.
+
+   ```bash
+   kubectl create namespace tailscale
+   kubectl -n tailscale create secret generic operator-oauth \
+     --from-literal=client_id='<client ID>' \
+     --from-literal=client_secret='<client secret>'
+   ```
+
+   `terraform.tfvars`에서 `tailscale_operator_enabled = true`로 바꾸고 apply합니다. 관리 콘솔 Machines에 `coldguard-k8s-operator`(`tag:k8s-operator`)가 보이면 정상입니다.
+
+3. **조회 계정 비밀번호**: 관리자 비밀번호로 로그인한 뒤 `cicd` 계정의 비밀번호를 정합니다.
+
+   ```bash
+   kubectl -n argocd port-forward svc/argocd-server 8080:80 &
+   argocd login localhost:8080 --plaintext --username admin \
+     --password "$(kubectl -n argocd get secret argocd-initial-admin-secret -o jsonpath='{.data.password}' | base64 -d)"
+   argocd account update-password --account cicd --current-password '<admin 비밀번호>' --new-password '<cicd 비밀번호>'
+   ```
+
+4. **루트 Application**: `coldguard-gitops`의 `argocd/` 폴더가 main에 머지된 뒤 `gitops_root_app_enabled = true`로 바꾸고 apply합니다. 그 전에 켜면 폴더가 없어 동기화 오류 알림이 갑니다. Argo CD 화면 주소가 정해지면 `argocd_url`도 넣어 알림 링크가 맞게 나오도록 합니다.
 
 ### Step 9. 배포 결과 검증
 
@@ -406,7 +451,7 @@ terraform plan -destroy
 terraform destroy
 ```
 
-Argo CD Helm Release와 gp3 StorageClass를 삭제합니다.
+루트 Application, Tailscale operator, Argo CD Helm Release, gp3 StorageClass를 삭제합니다. 루트 Application이 지워지면 하위 Application과 그 리소스(PVC 포함)도 함께 지워집니다. operator가 만든 tailnet 기기(`coldguard-k8s-operator`, `coldguard-mqtt`, `control-api`, `argocd`, egress 프록시)가 Tailscale 관리 콘솔에 남아 있으면 직접 지웁니다. 남겨 두면 다음 배포 때 같은 이름에 `-1`이 붙습니다.
 
 #### 12-2. AWS 인프라 삭제
 

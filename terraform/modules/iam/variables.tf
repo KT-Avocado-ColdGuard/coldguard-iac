@@ -19,9 +19,9 @@ variable "github_repository" {
   type        = string
 }
 
-# GitHub Actions가 Push할 ECR Repository
+# GitHub Actions가 Push·Pull할 ECR Repository
 variable "ecr_repository_arns" {
-  description = "GitHub Actions가 Push할 ECR Repository ARN 목록"
+  description = "GitHub Actions가 Push·Pull할 ECR Repository ARN 목록"
   type        = list(string)
 }
 # KT 허브 상태 확인 지표 이름공간 (라우터 권한 제한)
@@ -34,4 +34,15 @@ variable "kt_hub_probe_namespace" {
 variable "backup_bucket_arn" {
   description = "백업·내보내기 버킷 ARN"
   type        = string
+}
+
+# 시설 ECR Pull 전용 IAM 사용자
+variable "onprem_sites" {
+  description = "ECR Pull 전용 IAM 사용자를 만들 시설 이름 목록"
+  type        = list(string)
+}
+
+variable "onprem_ecr_repository_arns" {
+  description = "시설 K3s가 Pull할 ECR Repository ARN 목록"
+  type        = list(string)
 }

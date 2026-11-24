@@ -126,7 +126,7 @@ ansible-doc community.general.ufw
 **실행 위치: Ubuntu VM 터미널.** 아래 URL은 이 저장소의 Git `origin`에서 확인한 값입니다. `coldguard`는 VM 안에 생성할 작업 폴더 이름이며 원하는 이름으로 바꿀 경우 이후 `cd`도 함께 바꾸십시오.
 
 ```bash
-git clone https://github.com/junsung202067/pratice-iac-code.git coldguard
+git clone https://github.com/KT-Avocado-ColdGuard/coldguard-iac.git coldguard
 cd coldguard/ansible
 pwd
 find . -maxdepth 4 -type f -print

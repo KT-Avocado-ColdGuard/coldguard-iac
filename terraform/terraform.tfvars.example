@@ -154,7 +154,7 @@ eks_node_group = {
 # 6. GitHub Actions
 # ============================================================
 
-# ECR에 이미지를 Push할 GitHub 저장소 (OWNER/REPO, main 브랜치만 허용)
+# ECR에 이미지를 Push·Pull할 GitHub 저장소 (OWNER/REPO, main 브랜치만 허용)
 github_repository = "KT-Avocado-ColdGuard/coldguard-apps"
 
 
@@ -167,13 +167,19 @@ github_repository = "KT-Avocado-ColdGuard/coldguard-apps"
 #   "arn:aws:iam::<ACCOUNT_ID>:user/<IAM 사용자>"
 # ]
 
+# EKS 조회 전용 IAM ARN (Secret은 볼 수 없음). IAM Identity Center 역할은 IAM 콘솔의 ARN을 경로까지 그대로 넣습니다.
+# eks_cluster_viewer_arns = [
+#   "arn:aws:iam::<ACCOUNT_ID>:role/aws-reserved/sso.amazonaws.com/<REGION>/AWSReservedSSO_SecurityAudit_<SUFFIX>"
+# ]
+
 # Tailscale로 private endpoint 접속을 확인한 뒤 false로 바꿉니다.
 # eks_public_access_enabled = true
 
 # AWS 내부 알림을 받을 이메일 (apply 후 구독 확인 메일을 눌러야 합니다)
 # alert_email = "you@example.com"
 
-# Private Subnet에서 서브넷 라우터로 보낼 목적지
+# Private Subnet에서 서브넷 라우터로 보낼 목적지 (기본값은 비어 있음)
+# VPC 안에서 tailnet으로 직접 나가야 할 때만 넣습니다. EKS는 Tailscale operator egress를 씁니다.
 # router_routed_cidrs = ["100.64.0.0/10"]
 
 # 백업 CronJob의 Namespace와 ServiceAccount

@@ -14,3 +14,21 @@ eks_cluster_name = "coldguard-prod-eks"
 
 # Argo CD v3.6.1
 argocd_chart_version = "10.15.0"
+
+# 알림 링크에 쓸 Argo CD 주소 (tailnet 이름이 들어가므로 실제 tfvars에만 넣습니다)
+# argocd_url = "https://argocd.<tailnet>.ts.net"
+
+# ==========================================
+# Tailscale Operator
+# ==========================================
+
+# operator-oauth Secret을 만든 뒤 true로 바꿉니다.
+tailscale_operator_enabled = false
+# tailscale_operator_chart_version = "1.98.3"
+
+# ==========================================
+# GitOps 루트 Application
+# ==========================================
+
+# coldguard-gitops의 argocd/ 폴더가 main에 머지된 뒤 true로 바꿉니다.
+gitops_root_app_enabled = false

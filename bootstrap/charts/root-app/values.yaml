@@ -1,0 +1,3 @@
+repoURL: https://github.com/KT-Avocado-ColdGuard/coldguard-gitops.git
+targetRevision: main
+path: argocd
