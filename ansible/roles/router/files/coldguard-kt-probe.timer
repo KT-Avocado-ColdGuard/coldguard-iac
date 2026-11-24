@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ColdGuard KT hub probe every minute
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec=1min
+AccuracySec=5s
+Unit=coldguard-kt-probe.service
+
+[Install]
+WantedBy=timers.target

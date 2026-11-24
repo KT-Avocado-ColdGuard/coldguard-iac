@@ -66,6 +66,12 @@ variable "cluster_admin_arns" {
   default     = []
 }
 
+variable "cluster_viewer_arns" {
+  description = "클러스터 조회 전용 권한을 줄 IAM 사용자·Role ARN"
+  type        = list(string)
+  default     = []
+}
+
 variable "pod_identity_associations" {
   description = "Pod Identity 연결 목록"
 

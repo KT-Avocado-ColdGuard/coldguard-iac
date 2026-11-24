@@ -21,3 +21,15 @@ output "argocd_chart_version" {
   description = "Argo CD Helm Chart Version"
   value       = var.argocd_chart_version
 }
+
+# Tailscale Operator
+output "tailscale_operator_installed" {
+  description = "Tailscale operator installed"
+  value       = var.tailscale_operator_enabled
+}
+
+# 루트 Application
+output "gitops_root_app_enabled" {
+  description = "Root Application created"
+  value       = var.gitops_root_app_enabled
+}

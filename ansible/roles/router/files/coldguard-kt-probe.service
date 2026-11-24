@@ -1,0 +1,12 @@
+[Unit]
+Description=ColdGuard KT hub probe (CloudWatch ProbeSuccess)
+Wants=network-online.target
+After=network-online.target tailscaled.service
+
+[Service]
+Type=oneshot
+# snap으로 설치한 AWS CLI 경로 포함
+Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/snap/bin
+ExecStart=/usr/local/bin/coldguard-kt-probe.sh
+TimeoutStartSec=50
+NoNewPrivileges=true

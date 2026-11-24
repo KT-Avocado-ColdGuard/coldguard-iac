@@ -20,7 +20,8 @@ resource "aws_eks_cluster" "main" {
     # 서브넷 라우터 장애 시 비상 접속용으로 다시 켤 수 있습니다.
     endpoint_public_access = var.public_access_enabled
 
-    public_access_cidrs = var.public_access_cidrs
+    # public endpoint를 끄면 허용 CIDR은 쓰이지 않으므로 넘기지 않습니다(기존 값 유지, plan 차이 방지).
+    public_access_cidrs = var.public_access_enabled ? var.public_access_cidrs : null
   }
 
   tags = {
@@ -126,6 +127,34 @@ resource "aws_eks_access_policy_association" "admin" {
   }
 
   depends_on = [aws_eks_access_entry.admin]
+}
+
+
+# ============================================
+# 클러스터 조회 전용 (Access Entry)
+# ============================================
+# 보안 검토 등 읽기만 필요한 사용자용입니다. AmazonEKSViewPolicy는 Secret을 읽지 못합니다.
+# IAM Identity Center 역할은 경로(aws-reserved/sso.amazonaws.com/...)를 포함한 ARN 그대로 넣습니다.
+# 권한 세트 할당을 지웠다가 다시 만들면 역할 이름의 접미사가 바뀌므로 ARN도 다시 넣어야 합니다.
+resource "aws_eks_access_entry" "viewer" {
+  for_each = toset(var.cluster_viewer_arns)
+
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = each.value
+}
+
+resource "aws_eks_access_policy_association" "viewer" {
+  for_each = toset(var.cluster_viewer_arns)
+
+  cluster_name  = aws_eks_cluster.main.name
+  principal_arn = each.value
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSViewPolicy"
+
+  access_scope {
+    type = "cluster"
+  }
+
+  depends_on = [aws_eks_access_entry.viewer]
 }
 
 

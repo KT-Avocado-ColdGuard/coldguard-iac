@@ -83,10 +83,16 @@ variable "eks_cluster_admin_arns" {
   default     = []
 }
 
-variable "router_routed_cidrs" {
-  description = "Private Subnet에서 서브넷 라우터로 보낼 목적지 CIDR"
+variable "eks_cluster_viewer_arns" {
+  description = "EKS 조회 전용 권한(AmazonEKSViewPolicy)을 줄 IAM 사용자·Role ARN 목록"
   type        = list(string)
-  default     = ["100.64.0.0/10"]
+  default     = []
+}
+
+variable "router_routed_cidrs" {
+  description = "Private Subnet에서 서브넷 라우터로 보낼 목적지 CIDR (비우면 VPC → tailnet 경로와 라우터 SG의 VPC 인그레스를 만들지 않음)"
+  type        = list(string)
+  default     = []
 }
 
 variable "backup_service_account" {
