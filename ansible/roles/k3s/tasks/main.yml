@@ -64,7 +64,7 @@
   changed_when: false
 
 # ------------------------------------------
-# 4. K3s 설치
+# 3. K3s 설치
 # ------------------------------------------
 
 - name: Check K3s installation
@@ -92,7 +92,7 @@
 
 
   # ------------------------------------------
-# 9. K3s 버전 검증
+# 4. K3s 버전 검증
 # ------------------------------------------
 
 - name: Check installed K3s version
@@ -102,6 +102,7 @@
       - --version
   register: k3s_version_result
   changed_when: false
+  check_mode: false
 
 - name: Verify K3s version
   ansible.builtin.assert:
@@ -177,7 +178,7 @@
 
 
 # ------------------------------------------
-# 10. kubeconfig 설정
+# 9. kubeconfig 설정
 # ------------------------------------------
 
 - name: Get kubeconfig user information
@@ -221,7 +222,7 @@
       export KUBECONFIG="$HOME/.kube/config"
 
 # ------------------------------------------
-# 11. 설치 결과 검증
+# 10. 설치 결과 검증
 # ------------------------------------------
 
 - name: Wait for K3s node Ready
