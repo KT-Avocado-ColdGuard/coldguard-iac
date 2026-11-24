@@ -90,6 +90,28 @@
     INSTALL_K3S_SKIP_START: "true"
   when: not k3s_binary.stat.exists
 
+
+  # ------------------------------------------
+# 9. K3s 버전 검증
+# ------------------------------------------
+
+- name: Check installed K3s version
+  ansible.builtin.command:
+    argv:
+      - k3s
+      - --version
+  register: k3s_version_result
+  changed_when: false
+
+- name: Verify K3s version
+  ansible.builtin.assert:
+    that:
+      - k3s_version in k3s_version_result.stdout_lines[0]
+    fail_msg: >-
+      K3s version mismatch.
+      Expected: {{ k3s_version }}
+      Actual: {{ k3s_version_result.stdout_lines[0] }}
+
 # ------------------------------------------
 # 5. Credential Provider 지원 확인
 # ------------------------------------------
@@ -152,26 +174,7 @@
 - name: Apply pending K3s restart
   ansible.builtin.meta: flush_handlers
 
-# ------------------------------------------
-# 9. K3s 버전 검증
-# ------------------------------------------
 
-- name: Check installed K3s version
-  ansible.builtin.command:
-    argv:
-      - k3s
-      - --version
-  register: k3s_version_result
-  changed_when: false
-
-- name: Verify K3s version
-  ansible.builtin.assert:
-    that:
-      - k3s_version in k3s_version_result.stdout_lines[0]
-    fail_msg: >-
-      K3s version mismatch.
-      Expected: {{ k3s_version }}
-      Actual: {{ k3s_version_result.stdout_lines[0] }}
 
 # ------------------------------------------
 # 10. kubeconfig 설정
