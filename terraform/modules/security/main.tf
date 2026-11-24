@@ -67,3 +67,14 @@ resource "aws_vpc_security_group_egress_rule" "router_all" {
   cidr_ipv4   = "0.0.0.0/0"
   ip_protocol = "-1"
 }
+
+#subnet router security group 인바운드 규칙, VPC 내부에서 tailnet으로 나가는 트래픽 허용
+#Private Route Table이 tailnet 대역을 라우터 ENI로 보내므로, 패킷이 라우터 SG를 통과해야 합니다.
+resource "aws_vpc_security_group_ingress_rule" "router_from_vpc" {
+  security_group_id = aws_security_group.router.id
+
+  description = "Allow VPC traffic routed to tailnet"
+
+  cidr_ipv4   = var.vpc_cidr
+  ip_protocol = "-1"
+}

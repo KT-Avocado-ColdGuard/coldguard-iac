@@ -27,3 +27,13 @@ output "router_public_ips" {
     key => instance.public_ip
   }
 }
+
+#라우터 기본 ENI 목록
+output "router_eni_ids" {
+  description = "Router EC2 primary ENI IDs"
+
+  value = {
+    for key, instance in aws_instance.router :
+    key => instance.primary_network_interface_id
+  }
+}

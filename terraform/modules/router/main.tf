@@ -52,3 +52,29 @@ resource "aws_instance" "router" {
     Name = "${var.name}-${var.environment}-${replace(each.key, "_", "-")}"
   }
 }
+
+
+# ============================================
+# Private Subnet → Tailscale 경로
+# ============================================
+# EKS Pod가 tailnet(KT 허브 등)으로 보내는 트래픽을 서브넷 라우터로 보냅니다.
+# 라우터가 여러 대여도 경로는 키 이름순 첫 번째 라우터로 향합니다.
+locals {
+  primary_router_key = sort(keys(var.instances))[0]
+
+  routed = {
+    for pair in setproduct(keys(var.private_route_table_ids), var.routed_cidrs) :
+    "${pair[0]}|${pair[1]}" => {
+      route_table_id = var.private_route_table_ids[pair[0]]
+      cidr           = pair[1]
+    }
+  }
+}
+
+resource "aws_route" "tailnet" {
+  for_each = local.routed
+
+  route_table_id         = each.value.route_table_id
+  destination_cidr_block = each.value.cidr
+  network_interface_id   = aws_instance.router[local.primary_router_key].primary_network_interface_id
+}

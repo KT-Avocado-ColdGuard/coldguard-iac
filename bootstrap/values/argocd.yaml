@@ -1,0 +1,48 @@
+# Argo CD Helm values (차트 10.15.0 / Argo CD 3.6.1)
+#
+# 구성 원칙
+#   - 단일 구성(HA 아님): 노드 3대 규모에서 HA는 과합니다.
+#   - ApplicationSet 끔: 시설별 구성은 Ansible로 찍어 내므로 쓰지 않습니다.
+#   - Notifications 켬: 배포 결과를 Slack으로 보냅니다.
+#   - Dex 켬: GitHub 로그인용입니다.
+
+server:
+  service:
+    # 외부 LoadBalancer 없이 port-forward 또는 Tailscale로만 접속합니다.
+    type: ClusterIP
+
+# 이 차트는 ApplicationSet 컨트롤러를 항상 만들므로 0개로 실행해 끕니다.
+applicationSet:
+  replicas: 0
+
+# EKS의 Prometheus Agent가 application-controller 지표(8082)를 수집할 수 있도록 metrics Service를 만듭니다.
+controller:
+  metrics:
+    enabled: true
+
+notifications:
+  enabled: true
+  # Slack 토큰이 준비되면 argocd-notifications-secret의 slack-token 키에 넣고 아래 주석을 풉니다.
+  # notifiers:
+  #   service.slack: |
+  #     token: $slack-token
+
+dex:
+  enabled: true
+
+# GitHub 로그인
+# OAuth App의 Client Secret은 argocd-secret의 dex.github.clientSecret 키에 넣습니다.
+# 값이 준비되면 아래 주석을 풀고 url과 clientID, orgs를 채웁니다.
+# configs:
+#   cm:
+#     url: https://<Argo CD 접속 주소>
+#     dex.config: |
+#       connectors:
+#         - type: github
+#           id: github
+#           name: GitHub
+#           config:
+#             clientID: <OAuth App Client ID>
+#             clientSecret: $dex.github.clientSecret
+#             orgs:
+#               - name: KT-Avocado-ColdGuard

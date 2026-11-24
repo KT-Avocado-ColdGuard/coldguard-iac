@@ -36,13 +36,8 @@ resource "helm_release" "argocd" {
   atomic  = true
   timeout = 900
 
+  # 설정은 values/argocd.yaml에서 관리합니다.
   values = [
-    yamlencode({
-      server = {
-        service = {
-          type = "ClusterIP"
-        }
-      }
-    })
+    file("${path.module}/values/argocd.yaml")
   ]
 }

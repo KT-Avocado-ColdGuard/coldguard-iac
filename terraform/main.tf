@@ -1,4 +1,4 @@
-#네트워크 모듈 생성 빠라라라라밤
+# VPC, Subnet, Route Table, S3 Gateway Endpoint
 module "network" {
   source = "./modules/network"
 
@@ -9,7 +9,7 @@ module "network" {
   aws_region  = var.aws_region
 }
 
-#보안 모듈 생성 빠라라라라밤
+# NAT·Router Security Group
 module "security" {
   source = "./modules/security"
 
@@ -20,7 +20,7 @@ module "security" {
   subnets     = var.subnets
 }
 
-#iam 모듈 생성 짜라빠빠 그대는 아름다워
+# NAT·Router·Lambda·EKS·GitHub Actions IAM
 module "iam" {
   source = "./modules/iam"
 
@@ -29,10 +29,13 @@ module "iam" {
   private_route_table_ids = module.network.private_route_table_ids
 
   github_repository   = var.github_repository
-  ecr_repository_name = "${var.name}-${var.environment}-app"
+  ecr_repository_arns = values(module.ecr.repository_arns)
+
+  kt_hub_probe_namespace = module.monitoring.kt_hub_probe_namespace
+  backup_bucket_arn      = module.storage.backup_bucket_arn
 }
 
-#nat instance 생성 빠라라라라밤
+# NAT Instance (AZ별 고정 ENI·EIP + ASG)
 module "nat" {
   source = "./modules/nat"
 
@@ -48,17 +51,14 @@ module "nat" {
 
   public_subnet_ids = module.network.public_subnet_ids
   nat_sg_id         = module.security.nat_sg_id
-
-  depends_on = [module.network]
 }
 
-#fail over 모듈 생성 짜라빠빠빠빠
+# NAT 장애 감지와 Private 경로 자동 전환
 module "failover" {
   source = "./modules/failover"
 
   name        = var.name
   environment = var.environment
-  aws_region  = var.aws_region
 
   nat_asg_names = module.nat.nat_asg_names
 
@@ -66,9 +66,11 @@ module "failover" {
   nat_eni_ids             = module.nat.nat_eni_ids
 
   lambda_role_arn = module.iam.failover_lambda_role_arn
+  alert_topic_arn = module.monitoring.alert_topic_arn
 }
 
-#priavte route table에 nat eni 연결
+# Private Route Table 기본 경로 → 같은 AZ NAT ENI
+# Failover Lambda가 바꾼 경로를 apply가 되돌리지 않도록 ENI 변경은 무시합니다.
 resource "aws_route" "private_nat" {
   for_each = module.network.private_route_table_ids
 
@@ -89,7 +91,7 @@ resource "aws_route" "private_nat" {
   }
 }
 
-#라우터 모듈 생성 빠라라라빰 함박아 해병님
+# Tailscale Subnet Router
 module "router" {
   source = "./modules/router"
 
@@ -106,10 +108,12 @@ module "router" {
 
   router_instance_profile_name = module.iam.router_instance_profile_name
 
-  depends_on = [module.network]
+  # Private Subnet에서 tailnet으로 가는 경로
+  private_route_table_ids = module.network.private_route_table_ids
+  routed_cidrs            = var.router_routed_cidrs
 }
 
-#eks 모듈 생성 짜라라라라라 그대는 아름다워 짜짜라라라짜라라바빠빠빠
+# EKS Cluster와 Managed Node Group
 module "eks" {
   source = "./modules/eks"
 
@@ -125,22 +129,32 @@ module "eks" {
     module.network.private_subnet_ids["private_c"]
   ]
 
-  public_access_cidrs = var.eks_public_access_cidrs
+  public_access_enabled = var.eks_public_access_enabled
+  public_access_cidrs   = var.eks_public_access_cidrs
+  cluster_admin_arns    = var.eks_cluster_admin_arns
+  router_sg_id          = module.security.router_sg_id
 
+  pod_identity_associations = {
+    backup = {
+      namespace       = var.backup_service_account.namespace
+      service_account = var.backup_service_account.name
+      role_arn        = module.iam.backup_role_arn
+    }
+  }
 
-  node_instance_type = "t3.medium"
-  node_disk_size     = 20
+  node_instance_type = var.eks_node_group.instance_type
+  node_disk_size     = var.eks_node_group.disk_size
+  node_desired_size  = var.eks_node_group.desired_size
+  node_min_size      = var.eks_node_group.min_size
+  node_max_size      = var.eks_node_group.max_size
 
-  node_desired_size = 3
-  node_min_size     = 3
-  node_max_size     = 3
-
+  # 노드가 부팅할 때 NAT 경로가 있어야 클러스터에 조인할 수 있습니다.
   depends_on = [
     aws_route.private_nat
   ]
 }
 
-# ECR Module 생성 크아아아악
+# 애플리케이션 이미지 ECR Repository
 module "ecr" {
   source = "./modules/ecr"
 
@@ -148,4 +162,21 @@ module "ecr" {
   environment = var.environment
 
   repository_names = ["app"]
+}
+
+# AWS 내부 알림(SNS), KT 허브 상태 알람, Grafana 읽기 전용 IAM
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  name        = var.name
+  environment = var.environment
+  alert_email = var.alert_email
+}
+
+# 백업·이력 내보내기 S3 버킷
+module "storage" {
+  source = "./modules/storage"
+
+  name        = var.name
+  environment = var.environment
 }

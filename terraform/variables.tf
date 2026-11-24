@@ -28,11 +28,6 @@ variable "aws_region" {
   type        = string
 }
 
-variable "availability_zones" {
-  description = "가용 영역"
-  type        = list(string)
-}
-
 variable "subnets" {
   description = "서브넷 구성"
 
@@ -59,7 +54,57 @@ variable "eks_public_access_cidrs" {
   type        = list(string)
 }
 
+variable "eks_node_group" {
+  description = "EKS Managed Node Group 사양과 노드 수"
+
+  type = object({
+    instance_type = string
+    disk_size     = number
+    desired_size  = number
+    min_size      = number
+    max_size      = number
+  })
+}
+
 variable "github_repository" {
   description = "GitHub Actions repository"
   type        = string
+}
+
+variable "eks_public_access_enabled" {
+  description = "EKS Public API Endpoint 사용 여부. Tailscale 접속 확인 후 false로 바꿉니다."
+  type        = bool
+  default     = true
+}
+
+variable "eks_cluster_admin_arns" {
+  description = "EKS 관리자 권한을 줄 IAM 사용자·Role ARN 목록 (apply하는 사람은 제외)"
+  type        = list(string)
+  default     = []
+}
+
+variable "router_routed_cidrs" {
+  description = "Private Subnet에서 서브넷 라우터로 보낼 목적지 CIDR"
+  type        = list(string)
+  default     = ["100.64.0.0/10"]
+}
+
+variable "backup_service_account" {
+  description = "백업·이력 내보내기 CronJob의 Kubernetes Namespace와 ServiceAccount"
+
+  type = object({
+    namespace = string
+    name      = string
+  })
+
+  default = {
+    namespace = "coldguard"
+    name      = "s3-backup"
+  }
+}
+
+variable "alert_email" {
+  description = "AWS 내부 알림을 받을 이메일. 비워 두면 구독을 만들지 않습니다."
+  type        = string
+  default     = ""
 }
