@@ -1,0 +1,179 @@
+---
+# ==========================================
+# ColdGuard ECR Local Integration Test
+# K3s 설치 및 재시작 없음
+# ==========================================
+
+- name: Test ECR Credential Provider locally
+  hosts: facility-01
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ../group_vars/all.yml
+
+  tasks:
+
+    # 1. Vault 변수 확인
+    - name: Verify ECR variables
+      ansible.builtin.assert:
+        that:
+          - ecr_access_key_id is defined
+          - ecr_secret_access_key is defined
+          - ecr_provider_version is defined
+        quiet: true
+      no_log: true
+
+    # 2. 임시 테스트 디렉터리 생성
+    - name: Create local test directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: coldguard-ecr-test
+      register: ecr_test_dir
+
+    - name: Set local test paths
+      ansible.builtin.set_fact:
+        ecr_provider_bin_dir: "{{ ecr_test_dir.path }}/bin"
+        ecr_provider_config: "{{ ecr_test_dir.path }}/config.yaml"
+        ecr_credentials_file: "{{ ecr_test_dir.path }}/credentials"
+
+    - name: Run local ECR integration test
+      block:
+
+        # 3. 바이너리 폴더 생성
+        - name: Create provider bin directory
+          ansible.builtin.file:
+            path: "{{ ecr_provider_bin_dir }}"
+            state: directory
+            mode: "0755"
+
+        # 4. 바이너리 다운로드
+        - name: Download ECR Credential Provider
+          ansible.builtin.get_url:
+            url: "https://artifacts.k8s.io/binaries/cloud-provider-aws/{{ ecr_provider_version }}/linux/amd64/ecr-credential-provider-linux-amd64"
+            dest: "{{ ecr_provider_bin_dir }}/ecr-credential-provider"
+            mode: "0755"
+
+        # 5. Vault 인증 파일 생성
+        - name: Deploy temporary AWS credentials
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../roles/k3s/templates/ecr-credentials.j2"
+            dest: "{{ ecr_credentials_file }}"
+            mode: "0600"
+          no_log: true
+
+        # 6. Provider 설정 파일 생성
+        - name: Deploy Credential Provider config
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../roles/k3s/templates/ecr-config.yaml.j2"
+            dest: "{{ ecr_provider_config }}"
+            mode: "0644"
+
+        # 7. 인증 파일 권한 검사
+        - name: Check credentials permissions
+          ansible.builtin.stat:
+            path: "{{ ecr_credentials_file }}"
+          register: credentials_stat
+          no_log: true
+
+        - name: Verify credentials permissions
+          ansible.builtin.assert:
+            that:
+              - credentials_stat.stat.mode == '0600'
+            quiet: true
+          no_log: true
+
+        # 8. Provider 버전 확인
+        - name: Check provider version
+          ansible.builtin.command:
+            argv:
+              - "{{ ecr_provider_bin_dir }}/ecr-credential-provider"
+              - --version
+          register: provider_version_result
+          changed_when: false
+
+        - name: Verify provider version
+          ansible.builtin.assert:
+            that:
+              - ecr_provider_version in provider_version_result.stdout
+            quiet: true
+
+        # 9. Provider 인증 응답 검증
+        - name: Verify provider auth response
+          ansible.builtin.command:
+            argv:
+              - python3
+              - -c
+              - |
+                import json
+                import subprocess
+
+                account = subprocess.run(
+                    [
+                        "aws", "sts", "get-caller-identity",
+                        "--query", "Account",
+                        "--output", "text"
+                    ],
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=30
+                ).stdout.strip()
+
+                request = {
+                    "apiVersion": "credentialprovider.kubelet.k8s.io/v1",
+                    "kind": "CredentialProviderRequest",
+                    "image": (
+                        f"{account}.dkr.ecr.ap-northeast-2.amazonaws.com/"
+                        "coldguard-prod-collector:test"
+                    )
+                }
+
+                result = subprocess.run(
+                    ["{{ ecr_provider_bin_dir }}/ecr-credential-provider"],
+                    input=json.dumps(request),
+                    capture_output=True,
+                    text=True,
+                    check=True,
+                    timeout=30
+                )
+
+                response = json.loads(result.stdout)
+                auth = response.get("auth", {})
+
+                assert auth, "No authentication data"
+
+                assert any(
+                    entry.get("username") and entry.get("password")
+                    for entry in auth.values()
+                ), "Incomplete authentication data"
+
+                print("ECR Provider authentication: PASS")
+
+          environment:
+            AWS_SHARED_CREDENTIALS_FILE: "{{ ecr_credentials_file }}"
+            AWS_CONFIG_FILE: /dev/null
+            AWS_EC2_METADATA_DISABLED: "true"
+            AWS_DEFAULT_REGION: "{{ ecr_region }}"
+            AWS_REGION: "{{ ecr_region }}"
+            AWS_PAGER: ""
+          changed_when: false
+          no_log: true
+
+        # 10. 성공 메시지
+        - name: Show test result
+          ansible.builtin.debug:
+            msg:
+              - "ECR Provider version: {{ ecr_provider_version }}"
+              - "ECR Credential Provider: PASS"
+              - "Credentials permissions: 0600"
+              - "K3s restart: NOT PERFORMED"
+
+      always:
+
+        # 11. 임시 인증 파일 포함 전체 삭제
+        - name: Remove local test directory
+          ansible.builtin.file:
+            path: "{{ ecr_test_dir.path }}"
+            state: absent
+          no_log: true

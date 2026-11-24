@@ -1,0 +1,16 @@
+---
+# ==========================================
+# ColdGuard K3s Deployment
+# ==========================================
+
+- name: Deploy ColdGuard K3s configuration
+  hosts: onprem
+  become: true
+  gather_facts: true
+
+  vars_files:
+    - ../group_vars/all.yml
+    - ../group_vars/vault.yml
+
+  roles:
+    - k3s
