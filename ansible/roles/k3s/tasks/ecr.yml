@@ -1,0 +1,88 @@
+---
+# ==========================================
+# ColdGuard ECR Credential Provider
+# ==========================================
+
+# 1. 시설별 인증 변수 확인
+- name: Verify ECR credentials are defined
+  ansible.builtin.assert:
+    that:
+      - ecr_access_key_id is defined
+      - ecr_secret_access_key is defined
+      - ecr_access_key_id | length > 0
+      - ecr_secret_access_key | length > 0
+    fail_msg: "Facility ECR credentials are required."
+  no_log: true
+
+# 2. Provider 바이너리 URL 생성
+- name: Set ECR Provider download URL
+  ansible.builtin.set_fact:
+    ecr_provider_url: >-
+      https://artifacts.k8s.io/binaries/cloud-provider-aws/{{ ecr_provider_version }}/linux/amd64/ecr-credential-provider-linux-amd64
+
+# 3. 다운로드 가능 여부 확인
+- name: Verify ECR Provider binary is available
+  ansible.builtin.uri:
+    url: "{{ ecr_provider_url }}"
+    method: HEAD
+    status_code: 200
+    follow_redirects: all
+    timeout: 30
+  changed_when: false
+
+# 4. 실행 바이너리 디렉터리 생성
+- name: Create ECR Provider bin directory
+  ansible.builtin.file:
+    path: "{{ ecr_provider_bin_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# 5. 설정 디렉터리 생성
+- name: Create ECR pull directory
+  ansible.builtin.file:
+    path: /etc/coldguard/ecr-pull
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+# 6. 버전별 바이너리 다운로드
+- name: Download ECR Credential Provider
+  ansible.builtin.get_url:
+    url: "{{ ecr_provider_url }}"
+    dest: "{{ ecr_provider_bin_dir }}/ecr-credential-provider-{{ ecr_provider_version }}"
+    owner: root
+    group: root
+    mode: "0755"
+    force: false
+
+# 7. kubelet이 사용할 이름으로 배치
+- name: Deploy ECR Credential Provider binary
+  ansible.builtin.copy:
+    src: "{{ ecr_provider_bin_dir }}/ecr-credential-provider-{{ ecr_provider_version }}"
+    dest: "{{ ecr_provider_bin_dir }}/ecr-credential-provider"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0755"
+
+# 8. 시설별 AWS 자격 증명 배치
+- name: Deploy ECR credentials
+  ansible.builtin.template:
+    src: ecr-credentials.j2
+    dest: "{{ ecr_credentials_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+# 9. Credential Provider 설정 배치
+- name: Deploy ECR Credential Provider configuration
+  ansible.builtin.template:
+    src: ecr-config.yaml.j2
+    dest: "{{ ecr_provider_config }}"
+    owner: root
+    group: root
+    mode: "0644"

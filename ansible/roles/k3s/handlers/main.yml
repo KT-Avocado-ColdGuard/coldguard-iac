@@ -1,0 +1,10 @@
+---
+# ==========================================
+# ColdGuard K3s Handlers
+# ==========================================
+
+- name: Restart K3s
+  ansible.builtin.systemd_service:
+    name: k3s
+    state: restarted
+  when: k3s_binary.stat.exists

@@ -34,3 +34,17 @@ k3s_service_cidr: "10.43.0.0/16"
 
 # K3s 설정
 k3s_disable_traefik: true
+
+
+# ==========================================
+# ECR Credential Provider
+# ==========================================
+
+ecr_provider_version: "v1.37.0"
+
+ecr_provider_bin_dir: /var/lib/rancher/credentialprovider/bin
+ecr_provider_config: /var/lib/rancher/credentialprovider/config.yaml
+ecr_credentials_file: /etc/coldguard/ecr-pull/credentials
+
+ecr_region: ap-northeast-2
+ecr_cache_duration: "11h"

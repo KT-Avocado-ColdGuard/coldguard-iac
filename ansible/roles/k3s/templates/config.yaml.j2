@@ -11,3 +11,10 @@ service-cidr: "{{ k3s_service_cidr }}"
 disable:
   - traefik
 {% endif %}
+
+# ==========================================
+# ECR Credential Provider
+# ==========================================
+
+image-credential-provider-bin-dir: "{{ ecr_provider_bin_dir }}"
+image-credential-provider-config: "{{ ecr_provider_config }}"

@@ -1,0 +1,12 @@
+apiVersion: kubelet.config.k8s.io/v1
+kind: CredentialProviderConfig
+
+providers:
+  - name: ecr-credential-provider
+    matchImages:
+      - "*.dkr.ecr.*.amazonaws.com"
+    defaultCacheDuration: "{{ ecr_cache_duration }}"
+    apiVersion: credentialprovider.kubelet.k8s.io/v1
+    env:
+      - name: AWS_SHARED_CREDENTIALS_FILE
+        value: "{{ ecr_credentials_file }}"

@@ -5,7 +5,6 @@
 
 - name: ColdGuard On-Premises Setup
   hosts: onprem
-  connection: local
   become: true
   gather_facts: true
 
