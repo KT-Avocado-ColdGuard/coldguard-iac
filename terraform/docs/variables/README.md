@@ -6,7 +6,7 @@
 
 ## 루트 변수 목록
 
-`variables.tf`에는 필수 변수 10개와 기본값이 있는 선택 변수 5개가 있습니다. AZ 배치는 `subnets[*].az`가 결정합니다.
+`variables.tf`에는 필수 변수 10개와 기본값이 있는 선택 변수 6개가 있습니다. AZ 배치는 `subnets[*].az`가 결정합니다.
 
 ### 필수 변수
 
@@ -21,16 +21,17 @@
 | `instances` | `map(object)` | 예 | `nat_` 및 `router_`로 시작하는 EC2 구성 |
 | `eks_public_access_cidrs` | `list(string)` | 예 | EKS Public API Endpoint에 허용할 IPv4 CIDR |
 | `eks_node_group` | `object` | 예 | EKS Managed Node Group의 인스턴스 유형, 디스크 크기, 노드 수 |
-| `github_repository` | `string` | 예 | ECR에 이미지를 Push할 GitHub 저장소(`OWNER/REPO`). `main` 브랜치의 워크플로만 Role을 맡을 수 있습니다. |
+| `github_repository` | `string` | 예 | ECR에 이미지를 Push·Pull할 GitHub 저장소(`OWNER/REPO`). `main` 브랜치의 워크플로만 Role을 맡을 수 있습니다. |
 
 ### 선택 변수
 
 | 변수명 | 타입 | 기본값 | 설명 |
 |---|---|---|---|
 | `eks_cluster_admin_arns` | `list(string)` | `[]` | EKS 관리자 권한(Access Entry)을 줄 IAM ARN. apply하는 사람은 자동으로 관리자이므로 넣지 않습니다. |
-| `eks_public_access_enabled` | `bool` | `true` | EKS Public API Endpoint 사용 여부. Tailscale 접속 확인 후 `false`로 바꿉니다. |
+| `eks_cluster_viewer_arns` | `list(string)` | `[]` | EKS 조회 전용 권한(Access Entry, `AmazonEKSViewPolicy`)을 줄 IAM ARN. Secret 값은 볼 수 없습니다. IAM Identity Center 역할은 경로를 포함한 ARN 그대로 넣습니다. |
+| `eks_public_access_enabled` | `bool` | `true` | EKS Public API Endpoint 사용 여부. Tailscale 접속 확인 후 `false`로 바꿉니다. `false`이면 `eks_public_access_cidrs`는 적용되지 않지만, 라우터 장애 때 다시 `true`로 켜서 비상 접속할 주소로 남겨 둡니다. |
 | `alert_email` | `string` | `""` | AWS 내부 알림 SNS 이메일 구독. 비워 두면 구독을 만들지 않습니다. |
-| `router_routed_cidrs` | `list(string)` | `["100.64.0.0/10"]` | Private Route Table에서 서브넷 라우터 ENI로 보낼 목적지 CIDR |
+| `router_routed_cidrs` | `list(string)` | `[]` | Private Route Table에서 서브넷 라우터 ENI로 보낼 목적지 CIDR. 값을 넣으면 라우터 SG에 VPC 인그레스도 함께 열립니다. EKS의 tailnet 송신은 operator egress를 쓰므로 기본값은 비어 있습니다. |
 | `backup_service_account` | `object` | `coldguard` / `s3-backup` | 백업 CronJob에 S3 권한을 연결할 Namespace와 ServiceAccount |
 
 `alert_email`에 넣는 개인 이메일은 `terraform.tfvars`에만 두고 커밋하지 않습니다.
@@ -119,9 +120,10 @@ github_repository = "KT-Avocado-ColdGuard/coldguard-apps"
 | `eks_node_group` | 노드 수 변경은 Node Group 갱신으로 반영됩니다. 인스턴스 유형이나 디스크 크기 변경은 노드를 새로 만들어 교체합니다. |
 | `github_repository` | GitHub Actions Role의 신뢰 조건. 저장소 이름이 다르면 워크플로가 Role을 맡지 못합니다. |
 | `eks_cluster_admin_arns` | Access Entry와 관리자 정책 연결을 추가·삭제합니다. |
+| `eks_cluster_viewer_arns` | Access Entry와 조회 정책 연결을 추가·삭제합니다. |
 | `eks_public_access_enabled` | EKS Endpoint 설정 갱신. 끄면 Tailscale을 거치지 않는 `kubectl`과 Bootstrap 실행이 막힙니다. |
 | `alert_email` | SNS 이메일 구독 생성·삭제 |
-| `router_routed_cidrs` | Private Route Table의 서브넷 라우터 경로 추가·삭제 |
+| `router_routed_cidrs` | Private Route Table의 서브넷 라우터 경로와 라우터 SG의 VPC 인그레스 추가·삭제 |
 | `backup_service_account` | Pod Identity 연결 교체. 매니페스트의 Namespace·ServiceAccount와 같아야 합니다. |
 
-ECR Repository 목록은 루트 `main.tf`에서 `repository_names = ["app"]`으로 전달합니다. GitHub Actions Role은 ECR 모듈이 만든 모든 Repository에 Push할 수 있습니다. 변경 전에는 [사용 가이드](../../../README.md#step-11-terraform-변수-변경-적용)의 순서대로 `terraform plan`을 확인하세요.
+ECR Repository 목록과 시설 목록은 변수가 아니라 루트 `locals.tf`에서 정합니다. `ecr_eks_repositories`(`control-api`, `central-worker`)와 `ecr_onprem_repositories`(`collector`, `controller`, `field-web`)가 합쳐져 `<name>-<environment>-<이름>` Repository가 됩니다. GitHub Actions Role은 모든 Repository에 Push·Pull할 수 있고, `onprem_sites`(`site01`, `site02`, MQTT·DB의 `site_id`와 같은 값)의 시설별 IAM 사용자는 `ecr_onprem_repositories`만 Pull할 수 있습니다. 변경 전에는 [사용 가이드](../../../README.md#step-11-terraform-변수-변경-적용)의 순서대로 `terraform plan`을 확인하세요.

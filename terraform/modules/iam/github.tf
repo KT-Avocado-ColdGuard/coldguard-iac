@@ -51,7 +51,7 @@ resource "aws_iam_role" "github_actions" {
 }
 
 # ==========================================
-# GitHub Actions ECR Push Policy
+# GitHub Actions ECR Push·Pull Policy
 # ==========================================
 
 resource "aws_iam_role_policy" "github_actions_ecr" {
@@ -83,6 +83,20 @@ resource "aws_iam_role_policy" "github_actions_ecr" {
           "ecr:InitiateLayerUpload",
           "ecr:PutImage",
           "ecr:UploadLayerPart"
+        ]
+
+        Resource = var.ecr_repository_arns
+      },
+      {
+        # push한 이미지 재검사(Trivy), 배포 전 이미지 확인, ECR 스캔 결과 조회
+        Sid    = "ECRPullAndScanRead"
+        Effect = "Allow"
+
+        Action = [
+          "ecr:BatchGetImage",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:DescribeImages",
+          "ecr:DescribeImageScanFindings"
         ]
 
         Resource = var.ecr_repository_arns

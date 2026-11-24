@@ -1,0 +1,22 @@
+# 루트 Application: argocd/ 폴더의 AppProject와 Application을 만듭니다.
+# 하위 Application(infra-aws, monitoring, control-api)은 coldguard-gitops에서 관리합니다.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: coldguard-root
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: default
+  source:
+    repoURL: {{ .Values.repoURL }}
+    targetRevision: {{ .Values.targetRevision }}
+    path: {{ .Values.path }}
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true

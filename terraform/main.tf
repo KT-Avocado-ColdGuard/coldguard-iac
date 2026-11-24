@@ -18,9 +18,12 @@ module "security" {
   vpc_id      = module.network.vpc_id
   vpc_cidr    = var.vpc_cidr
   subnets     = var.subnets
+
+  # VPC → tailnet 경로를 쓸 때만 라우터 SG에 VPC 인그레스를 엽니다.
+  router_vpc_ingress_enabled = length(var.router_routed_cidrs) > 0
 }
 
-# NAT·Router·Lambda·EKS·GitHub Actions IAM
+# NAT·Router·Lambda·EKS·GitHub Actions·시설 ECR Pull IAM
 module "iam" {
   source = "./modules/iam"
 
@@ -30,6 +33,10 @@ module "iam" {
 
   github_repository   = var.github_repository
   ecr_repository_arns = values(module.ecr.repository_arns)
+
+  # 시설 K3s ECR Pull 전용 IAM 사용자
+  onprem_sites               = local.onprem_sites
+  onprem_ecr_repository_arns = [for repo in local.ecr_onprem_repositories : module.ecr.repository_arns[repo]]
 
   kt_hub_probe_namespace = module.monitoring.kt_hub_probe_namespace
   backup_bucket_arn      = module.storage.backup_bucket_arn
@@ -132,6 +139,7 @@ module "eks" {
   public_access_enabled = var.eks_public_access_enabled
   public_access_cidrs   = var.eks_public_access_cidrs
   cluster_admin_arns    = var.eks_cluster_admin_arns
+  cluster_viewer_arns   = var.eks_cluster_viewer_arns
   router_sg_id          = module.security.router_sg_id
 
   pod_identity_associations = {
@@ -161,7 +169,7 @@ module "ecr" {
   name        = var.name
   environment = var.environment
 
-  repository_names = ["app"]
+  repository_names = concat(local.ecr_eks_repositories, local.ecr_onprem_repositories)
 }
 
 # AWS 내부 알림(SNS), KT 허브 상태 알람, Grafana 읽기 전용 IAM

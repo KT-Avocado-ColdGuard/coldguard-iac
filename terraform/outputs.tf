@@ -32,6 +32,12 @@ output "github_actions_role_arn" {
   value       = module.iam.github_actions_role_arn
 }
 
+# 시설 K3s ECR Pull (액세스 키는 콘솔에서 발급)
+output "onprem_ecr_pull_user_names" {
+  description = "시설별 ECR Pull 전용 IAM 사용자 (액세스 키는 콘솔에서 발급)"
+  value       = module.iam.onprem_ecr_pull_user_names
+}
+
 # 백업·이력 내보내기
 output "backup_bucket_name" {
   description = "백업·이력 내보내기 S3 버킷 이름"

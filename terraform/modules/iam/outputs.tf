@@ -79,3 +79,13 @@ output "backup_role_arn" {
   description = "백업·이력 내보내기 CronJob Pod Identity Role ARN"
   value       = aws_iam_role.backup.arn
 }
+
+# 시설 ECR Pull 전용 IAM 사용자 (시설 이름 → 사용자 이름)
+output "onprem_ecr_pull_user_names" {
+  description = "시설별 ECR Pull 전용 IAM 사용자 이름"
+
+  value = {
+    for site, user in aws_iam_user.onprem_ecr_pull :
+    site => user.name
+  }
+}

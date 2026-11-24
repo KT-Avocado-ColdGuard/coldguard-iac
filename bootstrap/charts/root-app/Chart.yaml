@@ -1,0 +1,5 @@
+apiVersion: v2
+name: coldguard-root-app
+description: coldguard-gitops 저장소의 argocd/ 폴더를 바라보는 루트 Application (app-of-apps)
+type: application
+version: 0.1.0
