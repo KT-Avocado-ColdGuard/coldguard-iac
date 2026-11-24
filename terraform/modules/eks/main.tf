@@ -52,7 +52,9 @@ resource "aws_eks_node_group" "main" {
   update_config {
     max_unavailable = 1
   }
-
+  lifecycle {
+    ignore_changes = [scaling_config[0].desired_size]
+  }
   depends_on = [
     aws_eks_addon.vpc_cni
   ]
