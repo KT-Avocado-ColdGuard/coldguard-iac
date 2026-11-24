@@ -68,3 +68,10 @@ ansible/group_vars/vault.yml
 *.key
 *.csr
 *.pem
+
+# 인증서·키·CSR·패치
+*.crt
+*.key
+*.csr
+*.pem
+*.patch
