@@ -63,3 +63,8 @@ Thumbs.db
 
 
 ansible/group_vars/vault.yml
+# 인증서·키·CSR
+*.crt
+*.key
+*.csr
+*.pem
