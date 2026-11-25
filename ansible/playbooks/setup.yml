@@ -17,3 +17,12 @@
     - tailscale
     - firewall
     - k3s
+
+- name: Configure ColdGuard AWS Router
+  hosts: aws_router
+  connection: ssh
+  become: true
+  gather_facts: true
+
+  roles:
+    - router
