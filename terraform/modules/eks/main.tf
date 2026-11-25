@@ -103,7 +103,17 @@ resource "aws_eks_addon" "ebs_csi" {
     aws_eks_addon.pod_identity_agent
   ]
 }
+# EKS Metrics Server: HPA와 kubectl top이 쓰는 CPU·메모리 지표 제공
+resource "aws_eks_addon" "metrics_server" {
+  cluster_name = aws_eks_cluster.main.name
+  addon_name   = "metrics-server"
 
+  resolve_conflicts_on_create = "OVERWRITE"
+
+  depends_on = [
+    aws_eks_node_group.main
+  ]
+}
 
 # ============================================
 # 클러스터 관리자 (Access Entry)
