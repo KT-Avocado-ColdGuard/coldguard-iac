@@ -70,7 +70,22 @@ variable "github_repository" {
   description = "GitHub Actions repository"
   type        = string
 }
-
+variable "github_owner_id" {
+  description = "GitHub 조직 숫자 ID (OIDC sub 신뢰 조건용)"
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id는 숫자만 입력합니다."
+  }
+}
+variable "github_repo_id" {
+  description = "GitHub 저장소 숫자 ID (OIDC sub 신뢰 조건용)"
+  type        = string
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repo_id))
+    error_message = "github_repo_id는 숫자만 입력합니다."
+  }
+}
 variable "eks_public_access_enabled" {
   description = "EKS Public API Endpoint 사용 여부. Tailscale 접속 확인 후 false로 바꿉니다."
   type        = bool

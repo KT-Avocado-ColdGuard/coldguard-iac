@@ -32,6 +32,8 @@ module "iam" {
   private_route_table_ids = module.network.private_route_table_ids
 
   github_repository   = var.github_repository
+  github_owner_id     = var.github_owner_id
+  github_repo_id      = var.github_repo_id
   ecr_repository_arns = values(module.ecr.repository_arns)
 
   # 시설 K3s ECR Pull 전용 IAM 사용자

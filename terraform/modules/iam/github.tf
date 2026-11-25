@@ -1,7 +1,11 @@
 # ==========================================
 # GitHub Actions OIDC Provider
 # ==========================================
-
+locals {
+  # GitHub 토큰 sub 형식: repo:OWNER@OWNER_ID/REPO@REPO_ID:ref:refs/heads/main
+  github_owner = split("/", var.github_repository)[0]
+  github_repo  = split("/", var.github_repository)[1]
+}
 resource "aws_iam_openid_connect_provider" "github" {
   url = "https://token.actions.githubusercontent.com"
 
@@ -38,7 +42,7 @@ resource "aws_iam_role" "github_actions" {
           StringEquals = {
             "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
 
-            "token.actions.githubusercontent.com:sub" = "repo:${var.github_repository}:ref:refs/heads/main"
+            "token.actions.githubusercontent.com:sub" = "repo:${local.github_owner}@${var.github_owner_id}/${local.github_repo}@${var.github_repo_id}:ref:refs/heads/main"
           }
         }
       }
