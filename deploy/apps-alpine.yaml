@@ -1,0 +1,250 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: collector-state
+  namespace: coldguard
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: controller-state
+  namespace: coldguard
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: collector
+  namespace: coldguard
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: collector
+  template:
+    metadata:
+      labels:
+        app: collector
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: collector
+          image: ghcr.io/kt-avocado-coldguard/coldguard-collector:alpine-test1
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "collector.data_collector"]
+          envFrom:
+            - configMapRef:
+                name: coldguard-app-config
+          env:
+            - name: STATE_DB
+              value: /var/lib/coldguard/collector-site01.db
+            - name: COLLECTOR_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: coldguard-app-secrets, key: COLLECTOR_PASSWORD}
+            - name: COLLECTOR_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: coldguard-app-secrets, key: COLLECTOR_DB_PASSWORD}
+          ports:
+            - name: metrics
+              containerPort: 9201
+          readinessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: ca, mountPath: /etc/coldguard, readOnly: true}
+            - {name: state, mountPath: /var/lib/coldguard}
+      volumes:
+        - name: ca
+          configMap: {name: coldguard-ca}
+        - name: state
+          persistentVolumeClaim: {claimName: collector-state}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: controller
+  namespace: coldguard
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: controller
+  template:
+    metadata:
+      labels:
+        app: controller
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: controller
+          image: ghcr.io/kt-avocado-coldguard/coldguard-controller:alpine-test1
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "controller.controller_svc"]
+          envFrom:
+            - configMapRef:
+                name: coldguard-app-config
+          env:
+            - name: STATE_DB
+              value: /var/lib/coldguard/controller-site01.db
+            - name: CONTROLLER_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: coldguard-app-secrets, key: CONTROLLER_PASSWORD}
+            - name: CONTROLLER_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: coldguard-app-secrets, key: CONTROLLER_DB_PASSWORD}
+          ports:
+            - name: metrics
+              containerPort: 9202
+          readinessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          livenessProbe:
+            httpGet: {path: /metrics, port: metrics}
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: ca, mountPath: /etc/coldguard, readOnly: true}
+            - {name: state, mountPath: /var/lib/coldguard}
+      volumes:
+        - name: ca
+          configMap: {name: coldguard-ca}
+        - name: state
+          persistentVolumeClaim: {claimName: controller-state}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: field-web
+  namespace: coldguard
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app: field-web
+  template:
+    metadata:
+      labels:
+        app: field-web
+    spec:
+      securityContext:
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      containers:
+        - name: field-web
+          image: ghcr.io/kt-avocado-coldguard/coldguard-field-web:alpine-test1
+          imagePullPolicy: IfNotPresent
+          command: ["python", "-m", "field_web.field_web"]
+          envFrom:
+            - configMapRef:
+                name: coldguard-app-config
+          env:
+            - name: WEB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: coldguard-app-secrets, key: WEB_PASSWORD}
+            - name: WEB_DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: coldguard-app-secrets, key: WEB_DB_PASSWORD}
+            - name: WEB_SECRET
+              valueFrom:
+                secretKeyRef: {name: coldguard-app-secrets, key: WEB_SECRET}
+          ports:
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            tcpSocket: {port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 15
+          livenessProbe:
+            tcpSocket: {port: http}
+            initialDelaySeconds: 20
+            periodSeconds: 30
+          securityContext:
+            allowPrivilegeEscalation: false
+          resources:
+            requests: {cpu: 50m, memory: 64Mi}
+            limits: {memory: 256Mi}
+          volumeMounts:
+            - {name: ca, mountPath: /etc/coldguard, readOnly: true}
+      volumes:
+        - name: ca
+          configMap: {name: coldguard-ca}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: field-web
+  namespace: coldguard
+spec:
+  type: LoadBalancer
+  externalTrafficPolicy: Local
+  externalIPs: ["100.114.239.104"]
+  selector:
+    app: field-web
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: collector-metrics
+  namespace: coldguard
+spec:
+  selector:
+    app: collector
+  ports:
+    - name: metrics
+      port: 9201
+      targetPort: 9201
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: controller-metrics
+  namespace: coldguard
+spec:
+  selector:
+    app: controller
+  ports:
+    - name: metrics
+      port: 9202
+      targetPort: 9202
