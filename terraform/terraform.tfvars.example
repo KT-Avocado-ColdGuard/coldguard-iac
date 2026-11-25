@@ -156,7 +156,8 @@ eks_node_group = {
 
 # ECR에 이미지를 Push·Pull할 GitHub 저장소 (OWNER/REPO, main 브랜치만 허용)
 github_repository = "KT-Avocado-ColdGuard/coldguard-apps"
-
+github_owner_id   = "354344437"
+github_repo_id    = "1464803157"
 
 # ============================================================
 # 7. 선택 항목 (기본값이 있어 생략 가능)
