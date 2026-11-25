@@ -1,0 +1,23 @@
+---
+# ======================================
+# Tailscale Configuration
+# ======================================
+
+router_tailscale_hostname: coldguard-aws-router
+router_tailscale_tags: tag:aws-router
+router_tailscale_routes: 10.80.0.0/16
+
+# ======================================
+# IP Forwarding
+# ======================================
+
+router_sysctl_file: /etc/sysctl.d/99-coldguard-router.conf
+
+# ======================================
+# KT Hub Probe
+# ======================================
+
+router_probe_config_dir: /etc/coldguard
+
+router_probe_service: coldguard-kt-probe.service
+router_probe_timer: coldguard-kt-probe.timer

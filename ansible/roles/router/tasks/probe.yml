@@ -1,0 +1,71 @@
+---
+# ======================================
+# Create Configuration Directory
+# ======================================
+
+- name: Create ColdGuard configuration directory
+  ansible.builtin.file:
+    path: "{{ router_probe_config_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+# ======================================
+# Deploy Probe Script
+# ======================================
+
+- name: Copy KT Hub probe script
+  ansible.builtin.copy:
+    src: coldguard-kt-probe.sh
+    dest: /usr/local/bin/coldguard-kt-probe.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+# ======================================
+# Deploy Environment Configuration
+# ======================================
+
+- name: Copy KT Hub probe environment file
+  ansible.builtin.copy:
+    src: kt-probe.env.example
+    dest: "{{ router_probe_config_dir }}/kt-probe.env"
+    owner: root
+    group: root
+    mode: "0644"
+
+# ======================================
+# Deploy Systemd Files
+# ======================================
+
+- name: Copy systemd service and timer files
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/etc/systemd/system/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - "{{ router_probe_service }}"
+    - "{{ router_probe_timer }}"
+  register: router_probe_units
+
+# ======================================
+# Reload Systemd
+# ======================================
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: router_probe_units.changed
+
+# ======================================
+# Enable Probe Timer
+# ======================================
+
+- name: Enable and start KT Hub probe timer
+  ansible.builtin.systemd_service:
+    name: "{{ router_probe_timer }}"
+    enabled: true
+    state: started

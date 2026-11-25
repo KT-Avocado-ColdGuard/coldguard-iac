@@ -1,0 +1,46 @@
+---
+# ======================================
+# Check Tailscale Status
+# ======================================
+
+- name: Check current Tailscale status
+  ansible.builtin.command:
+    cmd: tailscale status --json
+  register: router_tailscale_status
+  changed_when: false
+
+- name: Parse Tailscale status
+  ansible.builtin.set_fact:
+    router_tailscale_connected: >-
+      {{
+        (router_tailscale_status.stdout
+        | from_json).BackendState == 'Running'
+      }}
+
+# ======================================
+# Connect Tailscale
+# ======================================
+
+- name: Configure Tailscale connection
+  when: not router_tailscale_connected
+  block:
+
+    - name: Check Tailscale authentication key
+      ansible.builtin.assert:
+        that:
+          - vault_tailscale_auth_key is defined
+          - vault_tailscale_auth_key | length > 0
+        fail_msg: "Tailscale auth key is required."
+      no_log: true
+
+    - name: Connect router to Tailscale
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - up
+          - "--auth-key={{ vault_tailscale_auth_key }}"
+          - "--hostname={{ router_tailscale_hostname }}"
+          - "--advertise-tags={{ router_tailscale_tags }}"
+          - "--advertise-routes={{ router_tailscale_routes }}"
+          - "--ssh"
+      no_log: true

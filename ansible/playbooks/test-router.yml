@@ -1,0 +1,13 @@
+---
+# ======================================
+# ColdGuard AWS Router Test Playbook
+# ======================================
+
+- name: Test ColdGuard AWS Router configuration
+  hosts: aws_router
+  connection: ssh
+  become: true
+  gather_facts: true
+
+  roles:
+    - router

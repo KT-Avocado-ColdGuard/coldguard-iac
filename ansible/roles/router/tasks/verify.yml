@@ -1,0 +1,151 @@
+---
+# ======================================
+# Verify IP Forwarding
+# ======================================
+
+- name: Check IP forwarding values
+  ansible.builtin.command:
+    argv:
+      - sysctl
+      - -n
+      - "{{ item }}"
+  loop:
+    - net.ipv4.ip_forward
+    - net.ipv6.conf.all.forwarding
+  register: router_forwarding_check
+  changed_when: false
+  failed_when: router_forwarding_check.stdout | trim != "1"
+
+
+# ======================================
+# Verify Tailscale Connection
+# ======================================
+
+- name: Check Tailscale connection
+  ansible.builtin.command:
+    cmd: tailscale status --json
+  register: router_tailscale_verify
+  changed_when: false
+
+- name: Verify Tailscale connection
+  ansible.builtin.assert:
+    that:
+      - (router_tailscale_verify.stdout | from_json).BackendState == 'Running'
+    fail_msg: "Tailscale is not connected."
+    success_msg: "Tailscale connection verified."
+
+
+# ======================================
+# Verify Tailscale Configuration
+# ======================================
+
+- name: Check Tailscale preferences
+  ansible.builtin.command:
+    cmd: tailscale debug prefs
+  register: router_tailscale_prefs
+  changed_when: false
+  no_log: true
+
+- name: Verify Tailscale router configuration
+  ansible.builtin.assert:
+    that:
+      - router_prefs.Hostname == router_tailscale_hostname
+      - router_tailscale_tags in (router_prefs.AdvertiseTags | default([], true))
+      - router_tailscale_routes in (router_prefs.AdvertiseRoutes | default([], true))
+      - router_prefs.RunSSH | bool
+    fail_msg: "Tailscale router configuration does not match."
+    success_msg: "Tailscale router configuration verified."
+  vars:
+    router_prefs: "{{ router_tailscale_prefs.stdout | from_json }}"
+
+
+# ======================================
+# Verify AWS CLI
+# ======================================
+
+- name: Check AWS CLI version
+  ansible.builtin.command:
+    cmd: /snap/bin/aws --version
+  register: router_aws_version
+  changed_when: false
+
+- name: Display AWS CLI version
+  ansible.builtin.debug:
+    msg: "{{ router_aws_version.stdout }}"
+
+
+# ======================================
+# Verify AWS IAM Role
+# ======================================
+
+- name: Check AWS caller identity
+  ansible.builtin.command:
+    cmd: /snap/bin/aws sts get-caller-identity --output json
+  register: router_aws_identity
+  changed_when: false
+
+- name: Verify AWS assumed role
+  ansible.builtin.assert:
+    that:
+      - "'assumed-role/' in (router_aws_identity.stdout | from_json).Arn"
+    fail_msg: "AWS assumed role credentials were not detected."
+    success_msg: "AWS assumed role credentials verified."
+
+- name: Display AWS IAM identity
+  ansible.builtin.debug:
+    msg: "{{ (router_aws_identity.stdout | from_json).Arn }}"
+
+
+# ======================================
+# Verify Probe Timer
+# ======================================
+
+- name: Check probe timer active status
+  ansible.builtin.command:
+    cmd: "systemctl is-active {{ router_probe_timer }}"
+  register: router_probe_timer_status
+  changed_when: false
+  failed_when: router_probe_timer_status.stdout | trim != "active"
+
+- name: Check probe timer enabled status
+  ansible.builtin.command:
+    cmd: "systemctl is-enabled {{ router_probe_timer }}"
+  register: router_probe_timer_enabled
+  changed_when: false
+  failed_when: router_probe_timer_enabled.stdout | trim != "enabled"
+
+- name: Check probe timer schedule
+  ansible.builtin.command:
+    cmd: "systemctl list-timers {{ router_probe_timer }} --no-pager"
+  register: router_probe_timer_schedule
+  changed_when: false
+
+- name: Display probe timer schedule
+  ansible.builtin.debug:
+    var: router_probe_timer_schedule.stdout_lines
+
+
+# ======================================
+# Verify Probe Service
+# ======================================
+
+- name: Check probe service execution result
+  ansible.builtin.command:
+    cmd: >-
+      systemctl show {{ router_probe_service }}
+      --property=Result
+      --property=ExecMainStatus
+      --property=ExecMainStartTimestampMonotonic
+  register: router_probe_result
+  changed_when: false
+  retries: 15
+  delay: 5
+  until:
+    - "'Result=success' in router_probe_result.stdout_lines"
+    - "'ExecMainStatus=0' in router_probe_result.stdout_lines"
+    - "'ExecMainStartTimestampMonotonic=0' not in router_probe_result.stdout_lines"
+    - "'ExecMainStartTimestampMonotonic=' not in router_probe_result.stdout_lines"
+
+- name: Display probe service result
+  ansible.builtin.debug:
+    var: router_probe_result.stdout_lines

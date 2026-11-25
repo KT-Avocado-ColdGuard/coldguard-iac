@@ -1,0 +1,79 @@
+---
+# ==========================================
+# Tailscale 설치 여부 확인
+# ==========================================
+
+- name: Check Tailscale installation
+  ansible.builtin.stat:
+    path: /usr/bin/tailscale
+  register: router_tailscale_binary
+
+
+# ==========================================
+# Tailscale 설치
+# ==========================================
+
+- name: Install Tailscale
+  when: not router_tailscale_binary.stat.exists
+  block:
+
+    - name: Download Tailscale repository key
+      ansible.builtin.get_url:
+        url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_facts['distribution_release'] }}.noarmor.gpg"
+        dest: /usr/share/keyrings/tailscale-archive-keyring.gpg
+        mode: "0644"
+
+    - name: Configure Tailscale repository
+      ansible.builtin.get_url:
+        url: "https://pkgs.tailscale.com/stable/ubuntu/{{ ansible_facts['distribution_release'] }}.tailscale-keyring.list"
+        dest: /etc/apt/sources.list.d/tailscale.list
+        mode: "0644"
+
+    - name: Install Tailscale package
+      ansible.builtin.apt:
+        name: tailscale
+        state: present
+        update_cache: true
+
+
+# ==========================================
+# Tailscale 서비스 활성화
+# ==========================================
+
+- name: Enable and start Tailscale service
+  ansible.builtin.systemd_service:
+    name: tailscaled
+    enabled: true
+    state: started
+
+
+# ==========================================
+# Snap 설치
+# ==========================================
+
+- name: Ensure snapd is installed
+  ansible.builtin.apt:
+    name: snapd
+    state: present
+
+
+# ==========================================
+# AWS CLI 설치 여부 확인
+# ==========================================
+
+- name: Check AWS CLI installation
+  ansible.builtin.command:
+    cmd: snap list aws-cli
+  register: router_aws_cli_check
+  changed_when: false
+  failed_when: router_aws_cli_check.rc not in [0, 1]
+
+
+# ==========================================
+# AWS CLI 설치
+# ==========================================
+
+- name: Install AWS CLI
+  ansible.builtin.command:
+    cmd: snap install aws-cli --classic
+  when: router_aws_cli_check.rc == 1
