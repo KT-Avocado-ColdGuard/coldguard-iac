@@ -65,7 +65,7 @@
 
 - name: Check AWS CLI version
   ansible.builtin.command:
-    cmd: /snap/bin/aws --version
+    cmd: "{{ router_aws_cli_binary }} --version"
   register: router_aws_version
   changed_when: false
 
@@ -80,7 +80,8 @@
 
 - name: Check AWS caller identity
   ansible.builtin.command:
-    cmd: /snap/bin/aws sts get-caller-identity --output json
+    cmd: "{{ router_aws_cli_binary }} sts get-caller-identity --output json
+    "
   register: router_aws_identity
   changed_when: false
 
