@@ -86,6 +86,11 @@ resource "aws_eks_addon" "vpc_cni" {
   addon_name   = "vpc-cni"
 
   resolve_conflicts_on_create = "OVERWRITE"
+
+  # coldguard 네임스페이스의 NetworkPolicy를 실제로 적용하는 정책 에이전트를 켠다.
+  configuration_values = jsonencode({
+    enableNetworkPolicy = "true"
+  })
 }
 
 
