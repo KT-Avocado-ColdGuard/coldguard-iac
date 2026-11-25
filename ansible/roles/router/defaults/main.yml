@@ -21,3 +21,15 @@ router_probe_config_dir: /etc/coldguard
 
 router_probe_service: coldguard-kt-probe.service
 router_probe_timer: coldguard-kt-probe.timer
+
+# ======================================
+# AWS CLI Configuration
+# ======================================
+
+router_aws_cli_version: "2.42.3"
+router_aws_cli_arch: x86_64
+router_aws_cli_install_dir: /usr/local/aws-cli
+router_aws_cli_bin_dir: /usr/local/bin
+router_aws_cli_binary: /usr/local/bin/aws
+
+router_aws_cli_url: "https://awscli.amazonaws.com/awscli-exe-linux-{{ router_aws_cli_arch }}-{{ router_aws_cli_version }}.zip"

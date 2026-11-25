@@ -47,33 +47,77 @@
     state: started
 
 
-# ==========================================
-# Snap 설치
-# ==========================================
-
-- name: Ensure snapd is installed
-  ansible.builtin.apt:
-    name: snapd
-    state: present
-
-
-# ==========================================
-# AWS CLI 설치 여부 확인
-# ==========================================
+# ======================================
+# Check AWS CLI Installation
+# ======================================
 
 - name: Check AWS CLI installation
+  ansible.builtin.stat:
+    path: "{{ router_aws_cli_binary }}"
+  register: router_aws_cli_stat
+
+- name: Check installed AWS CLI version
   ansible.builtin.command:
-    cmd: snap list aws-cli
+    cmd: "{{ router_aws_cli_binary }} --version"
   register: router_aws_cli_check
   changed_when: false
-  failed_when: router_aws_cli_check.rc not in [0, 1]
+  when: router_aws_cli_stat.stat.exists
 
 
-# ==========================================
-# AWS CLI 설치
-# ==========================================
+# ======================================
+# Install AWS CLI
+# ======================================
 
-- name: Install AWS CLI
-  ansible.builtin.command:
-    cmd: snap install aws-cli --classic
-  when: router_aws_cli_check.rc == 1
+- name: Install AWS CLI from official ZIP
+  when: >
+    not router_aws_cli_stat.stat.exists or
+    ('aws-cli/' ~ router_aws_cli_version ~ ' ')
+    not in (router_aws_cli_check.stdout | default(''))
+  block:
+
+    - name: Install unzip package
+      ansible.builtin.apt:
+        name: unzip
+        state: present
+
+    - name: Create temporary installation directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: awscli
+      register: router_aws_cli_tmp
+
+    - name: Download AWS CLI installer
+      ansible.builtin.get_url:
+        url: "{{ router_aws_cli_url }}"
+        dest: "{{ router_aws_cli_tmp.path }}/awscliv2.zip"
+        mode: "0644"
+
+    - name: Extract AWS CLI installer
+      ansible.builtin.unarchive:
+        src: "{{ router_aws_cli_tmp.path }}/awscliv2.zip"
+        dest: "{{ router_aws_cli_tmp.path }}"
+        remote_src: true
+
+    - name: Install or update AWS CLI
+      ansible.builtin.command:
+        argv:
+          - "{{ router_aws_cli_tmp.path }}/aws/install"
+          - --install-dir
+          - "{{ router_aws_cli_install_dir }}"
+          - --bin-dir
+          - "{{ router_aws_cli_bin_dir }}"
+          - --update
+
+  always:
+
+    - name: Remove temporary installation directory
+      ansible.builtin.file:
+        path: "{{ router_aws_cli_tmp.path }}"
+        state: absent
+      when:
+        - router_aws_cli_tmp is defined
+        - router_aws_cli_tmp.path is defined
+
+
+
+
