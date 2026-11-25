@@ -1,0 +1,121 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    deployment.kubernetes.io/revision: "5"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"annotations":{},"name":"field-web","namespace":"coldguard"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"field-web"}},"strategy":{"type":"Recreate"},"template":{"metadata":{"labels":{"app":"field-web"}},"spec":{"containers":[{"command":["python","-m","field_web.field_web"],"env":[{"name":"WEB_PASSWORD","valueFrom":{"secretKeyRef":{"key":"WEB_PASSWORD","name":"coldguard-app-secrets"}}},{"name":"WEB_DB_PASSWORD","valueFrom":{"secretKeyRef":{"key":"WEB_DB_PASSWORD","name":"coldguard-app-secrets"}}},{"name":"WEB_SECRET","valueFrom":{"secretKeyRef":{"key":"WEB_SECRET","name":"coldguard-app-secrets"}}}],"envFrom":[{"configMapRef":{"name":"coldguard-app-config"}}],"image":"ghcr.io/kt-avocado-coldguard/coldguard-field-web:alpine-test1","imagePullPolicy":"IfNotPresent","livenessProbe":{"initialDelaySeconds":20,"periodSeconds":30,"tcpSocket":{"port":"http"}},"name":"field-web","ports":[{"containerPort":8080,"name":"http"}],"readinessProbe":{"initialDelaySeconds":5,"periodSeconds":15,"tcpSocket":{"port":"http"}},"resources":{"limits":{"memory":"256Mi"},"requests":{"cpu":"50m","memory":"64Mi"}},"securityContext":{"allowPrivilegeEscalation":false},"volumeMounts":[{"mountPath":"/etc/coldguard","name":"ca","readOnly":true}]}],"securityContext":{"fsGroup":10001,"runAsGroup":10001,"runAsUser":10001},"volumes":[{"configMap":{"name":"coldguard-ca"},"name":"ca"}]}}}}
+  creationTimestamp: "2026-11-20T02:32:12Z"
+  generation: 5
+  name: field-web
+  namespace: coldguard
+  resourceVersion: "83478"
+  uid: f95854ec-fb2d-4ee8-9d93-23c337fa49ac
+spec:
+  progressDeadlineSeconds: 600
+  replicas: 1
+  revisionHistoryLimit: 10
+  selector:
+    matchLabels:
+      app: field-web
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app: field-web
+    spec:
+      containers:
+      - command:
+        - python
+        - -m
+        - field_web.field_web
+        env:
+        - name: WEB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: WEB_PASSWORD
+              name: coldguard-app-secrets
+        - name: WEB_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              key: WEB_DB_PASSWORD
+              name: coldguard-app-secrets
+        - name: WEB_SECRET
+          valueFrom:
+            secretKeyRef:
+              key: WEB_SECRET
+              name: coldguard-app-secrets
+        envFrom:
+        - configMapRef:
+            name: coldguard-app-config
+        image: ghcr.io/kt-avocado-coldguard/coldguard-field-web:alpine-test1
+        imagePullPolicy: IfNotPresent
+        livenessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 20
+          periodSeconds: 30
+          successThreshold: 1
+          tcpSocket:
+            port: http
+          timeoutSeconds: 1
+        name: field-web
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        readinessProbe:
+          failureThreshold: 3
+          initialDelaySeconds: 5
+          periodSeconds: 15
+          successThreshold: 1
+          tcpSocket:
+            port: http
+          timeoutSeconds: 1
+        resources:
+          limits:
+            memory: 256Mi
+          requests:
+            cpu: 50m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /etc/coldguard
+          name: ca
+          readOnly: true
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      securityContext:
+        fsGroup: 10001
+        runAsGroup: 10001
+        runAsUser: 10001
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - configMap:
+          defaultMode: 420
+          name: coldguard-ca
+        name: ca
+status:
+  availableReplicas: 1
+  conditions:
+  - lastTransitionTime: "2026-11-20T02:32:12Z"
+    lastUpdateTime: "2026-11-24T00:30:50Z"
+    message: ReplicaSet "field-web-c4548d64d" has successfully progressed.
+    reason: NewReplicaSetAvailable
+    status: "True"
+    type: Progressing
+  - lastTransitionTime: "2026-11-24T13:46:06Z"
+    lastUpdateTime: "2026-11-24T13:46:06Z"
+    message: Deployment has minimum availability.
+    reason: MinimumReplicasAvailable
+    status: "True"
+    type: Available
+  observedGeneration: 5
+  readyReplicas: 1
+  replicas: 1
+  terminatingReplicas: 0
+  updatedReplicas: 1
