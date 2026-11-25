@@ -22,7 +22,8 @@
 | `eks_public_access_cidrs` | `list(string)` | 예 | EKS Public API Endpoint에 허용할 IPv4 CIDR |
 | `eks_node_group` | `object` | 예 | EKS Managed Node Group의 인스턴스 유형, 디스크 크기, 노드 수 |
 | `github_repository` | `string` | 예 | ECR에 이미지를 Push·Pull할 GitHub 저장소(`OWNER/REPO`). `main` 브랜치의 워크플로만 Role을 맡을 수 있습니다. |
-
+| `github_owner_id` | `string` | 예 | GitHub 조직 숫자 ID. Actions OIDC 토큰의 sub가 `repo:OWNER@ID/REPO@ID:...` 형식이라 신뢰 조건에 필요합니다. |
+| `github_repo_id` | `string` | 예 | GitHub 저장소 숫자 ID. 위와 같은 이유로 필요합니다. |
 ### 선택 변수
 
 | 변수명 | 타입 | 기본값 | 설명 |
@@ -102,7 +103,8 @@ eks_node_group = {
 }
 
 github_repository = "KT-Avocado-ColdGuard/coldguard-apps"
-```
+github_owner_id   = "354344437"
+github_repo_id    = "1464803157"
 
 `203.0.113.10/32`는 문서용 예시 주소입니다. 실제 관리자 공인 IP/CIDR로 바꿔야 EKS Public API에 접근할 수 있습니다. `owner`에는 실제 담당자를 입력하세요. AMI를 직접 지정하려면 해당 인스턴스 객체에 `ami = "ami-..."`를 추가하고 대상 리전에서 사용할 수 있는지 확인합니다.
 

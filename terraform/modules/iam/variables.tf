@@ -18,7 +18,15 @@ variable "github_repository" {
   description = "GitHub repository (OWNER/REPO)"
   type        = string
 }
+variable "github_owner_id" {
+  description = "GitHub 조직의 숫자 ID. OIDC 토큰 sub에 OWNER@ID 형식으로 들어간다."
+  type        = string
+}
 
+variable "github_repo_id" {
+  description = "GitHub 저장소의 숫자 ID. OIDC 토큰 sub에 REPO@ID 형식으로 들어간다."
+  type        = string
+}
 # GitHub Actions가 Push·Pull할 ECR Repository
 variable "ecr_repository_arns" {
   description = "GitHub Actions가 Push·Pull할 ECR Repository ARN 목록"
