@@ -1,0 +1,73 @@
+---
+# Run from ansible/: ansible-playbook -i inventory/hosts.ini playbooks/deploy-apps.yml ...
+- name: Deploy existing ColdGuard applications only
+  hosts: onprem
+  become: true
+  gather_facts: false
+  serial: 1
+  any_errors_fatal: true
+  vars:
+    app_mode: plan
+    app_images: {}
+    app_confirm_apply: false
+    app_backup_dir: ""
+    app_rollout_timeout: 180
+    app_kubectl: ["/usr/local/bin/k3s", "kubectl"]
+  tasks:
+    - name: Validate requested operation
+      ansible.builtin.assert:
+        that:
+          - app_mode in ['plan', 'apply', 'rollback']
+          - app_mode == 'plan' or (app_confirm_apply | bool)
+        fail_msg: "Use plan first. apply/rollback requires app_confirm_apply=true."
+
+    - name: Create private temporary directory on facility
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: coldguard-app-deploy-
+      register: app_tmp
+      check_mode: false
+
+    - name: Run application deployment helper
+      block:
+        - name: Copy deployment helper
+          ansible.builtin.copy:
+            src: ../files/app_deploy.py
+            dest: "{{ app_tmp.path }}/app_deploy.py"
+            mode: "0700"
+          check_mode: false
+
+        - name: Write deployment request without runtime credentials
+          ansible.builtin.copy:
+            content: "{{ app_request | to_nice_json }}"
+            dest: "{{ app_tmp.path }}/request.json"
+            mode: "0600"
+          vars:
+            app_request:
+              mode: "{{ 'plan' if ansible_check_mode else app_mode }}"
+              images: "{{ app_images }}"
+              backup_dir: "{{ app_backup_dir }}"
+              timeout: "{{ app_rollout_timeout | int }}"
+              kubectl: "{{ app_kubectl }}"
+          check_mode: false
+
+        - name: Validate or update application Deployments
+          ansible.builtin.command:
+            argv:
+              - python3
+              - "{{ app_tmp.path }}/app_deploy.py"
+              - "{{ app_tmp.path }}/request.json"
+          register: app_result
+          changed_when: "'\"changed\": true' in app_result.stdout"
+          check_mode: false
+          # The helper prints summaries only, never complete manifests or Secret values.
+
+        - name: Show deployment result and backup location
+          ansible.builtin.debug:
+            msg: "{{ app_result.stdout | from_json }}"
+      always:
+        - name: Remove temporary helper and request
+          ansible.builtin.file:
+            path: "{{ app_tmp.path }}"
+            state: absent
+          check_mode: false
