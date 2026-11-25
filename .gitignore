@@ -88,3 +88,8 @@ vault.yml
 *.log
 *.bak
 *.tmp
+
+# Local app deployment inputs (copy the examples, do not commit filled values)
+ansible/app-release.local.json
+ansible/app-inventory.local.ini
+ansible/.venv-apps/
