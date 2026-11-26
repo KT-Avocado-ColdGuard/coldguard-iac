@@ -54,25 +54,26 @@ notifications:
         - name: Content-Type
           value: application/json
 
+  # 이미지 주소와 실패 사유에서 ECR 레지스트리(AWS 계정 ID 포함)는 빼고 저장소:태그만 디스코드로 보냅니다.
   templates:
     template.app-deployed: |
       webhook:
         discord:
           method: POST
           body: |
-            {"content": {{ printf "[배포 완료] %s\n상태: %s / %s\n리비전: %s\n이미지: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.sync.status .app.status.health.status .app.status.sync.revision (join ", " .app.status.summary.images) .context.argocdUrl .app.metadata.name | toJson }}}
+            {"content": {{ printf "[배포 완료] %s\n상태: %s / %s\n리비전: %s\n이미지: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.sync.status .app.status.health.status .app.status.sync.revision (regexReplaceAll `[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/` (join ", " .app.status.summary.images) "") .context.argocdUrl .app.metadata.name | toJson }}}
     template.app-sync-failed: |
       webhook:
         discord:
           method: POST
           body: |
-            {"content": {{ printf "[배포 실패] %s\n리비전: %s\n사유: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.sync.revision .app.status.operationState.message .context.argocdUrl .app.metadata.name | toJson }}}
+            {"content": {{ printf "[배포 실패] %s\n리비전: %s\n사유: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.sync.revision (regexReplaceAll `[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/` .app.status.operationState.message "") .context.argocdUrl .app.metadata.name | toJson }}}
     template.app-health-degraded: |
       webhook:
         discord:
           method: POST
           body: |
-            {"content": {{ printf "[상태 이상] %s\n상태: %s\n이미지: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.health.status (join ", " .app.status.summary.images) .context.argocdUrl .app.metadata.name | toJson }}}
+            {"content": {{ printf "[상태 이상] %s\n상태: %s\n이미지: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.health.status (regexReplaceAll `[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/` (join ", " .app.status.summary.images) "") .context.argocdUrl .app.metadata.name | toJson }}}
 
   triggers:
     # 동기화가 끝나고 Healthy가 됐을 때 커밋마다 한 번
