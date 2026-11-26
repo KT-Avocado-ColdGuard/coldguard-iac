@@ -1,0 +1,259 @@
+---
+# ======================================
+# 1. Hostname Configuration
+# ======================================
+
+- name: Set hostname only when different
+  ansible.builtin.raw: |
+    set -eu
+
+    if [ "$(hostnamectl --static)" != {{ kt_hub_hostname | quote }} ]; then
+      hostnamectl set-hostname {{ kt_hub_hostname | quote }}
+      echo KT_CHANGED
+    fi
+
+  register: kt_hostname_run
+  changed_when: "'KT_CHANGED' in kt_hostname_run.stdout"
+
+
+# ======================================
+# 2. Docker Installation
+# ======================================
+
+- name: Install only missing Docker packages
+  ansible.builtin.raw: |
+    set -eu
+
+    # Check missing Docker packages
+    missing=0
+
+    for pkg in docker-ce docker-ce-cli containerd.io docker-compose-plugin; do
+      if ! rpm -q "$pkg" >/dev/null 2>&1; then
+        missing=1
+      fi
+    done
+
+    # Install only when something is missing
+    if [ "$missing" -eq 1 ]; then
+
+      # Add Docker repository if missing
+      if [ ! -f /etc/yum.repos.d/docker-ce.repo ]; then
+        dnf install -y dnf-plugins-core
+        dnf config-manager --add-repo {{ kt_docker_repo_url | quote }}
+        echo KT_CHANGED
+      fi
+
+      # Docker CE
+      if ! rpm -q docker-ce >/dev/null 2>&1; then
+        dnf install -y 'docker-ce-{{ kt_docker_version }}*'
+        echo KT_CHANGED
+      fi
+
+      # Docker CLI
+      if ! rpm -q docker-ce-cli >/dev/null 2>&1; then
+        dnf install -y 'docker-ce-cli-{{ kt_docker_version }}*'
+        echo KT_CHANGED
+      fi
+
+      # containerd
+      if ! rpm -q containerd.io >/dev/null 2>&1; then
+        dnf install -y 'containerd.io-{{ kt_containerd_version }}*'
+        echo KT_CHANGED
+      fi
+
+      # Docker Compose
+      if ! rpm -q docker-compose-plugin >/dev/null 2>&1; then
+        dnf install -y 'docker-compose-plugin-{{ kt_compose_version }}*'
+        echo KT_CHANGED
+      fi
+    fi
+
+  register: kt_docker_install
+  changed_when: "'KT_CHANGED' in kt_docker_install.stdout"
+
+
+# ======================================
+# 3. Docker Service
+# ======================================
+
+- name: Enable and start Docker
+  ansible.builtin.raw: |
+    set -eu
+
+    # Enable boot startup
+    if ! systemctl is-enabled --quiet docker; then
+      systemctl enable docker
+      echo KT_CHANGED
+    fi
+
+    # Start only if stopped
+    if ! systemctl is-active --quiet docker; then
+      systemctl start docker
+      echo KT_CHANGED
+    fi
+
+  register: kt_docker_service
+  changed_when: "'KT_CHANGED' in kt_docker_service.stdout"
+
+
+# ======================================
+# 4. Tailscale Installation
+# ======================================
+
+- name: Install Tailscale only when missing
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! rpm -q tailscale >/dev/null 2>&1; then
+
+      # Add Tailscale repository
+      if [ ! -f /etc/yum.repos.d/tailscale.repo ]; then
+        dnf install -y dnf-plugins-core
+        dnf config-manager --add-repo {{ kt_tailscale_repo_url | quote }}
+        echo KT_CHANGED
+      fi
+
+      # Install Tailscale
+      dnf install -y 'tailscale-{{ kt_tailscale_version }}*'
+      echo KT_CHANGED
+
+    fi
+
+  register: kt_tailscale_install
+  changed_when: "'KT_CHANGED' in kt_tailscale_install.stdout"
+
+
+# ======================================
+# 5. Tailscale Service
+# ======================================
+
+- name: Enable and start Tailscale
+  ansible.builtin.raw: |
+    set -eu
+
+    # Enable boot startup
+    if ! systemctl is-enabled --quiet tailscaled; then
+      systemctl enable tailscaled
+      echo KT_CHANGED
+    fi
+
+    # Start only if stopped
+    if ! systemctl is-active --quiet tailscaled; then
+      systemctl start tailscaled
+      echo KT_CHANGED
+    fi
+
+  register: kt_tailscale_service
+  changed_when: "'KT_CHANGED' in kt_tailscale_service.stdout"
+
+
+# ======================================
+# Tailnet Connection
+# ======================================
+
+- name: Join Tailnet using Vault auth key
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! tailscale ip -4 2>/dev/null | grep -q '^100\.'; then
+
+      umask 077
+
+      # Create temporary key file
+      auth_file="$(mktemp /run/kt-tskey.XXXXXXXX)"
+
+      # Remove file when finished
+      trap 'rm -f "$auth_file"' EXIT
+
+      # Write decrypted Vault key temporarily
+      printf '%s' {{ kt_tailscale_authkey | quote }} > "$auth_file"
+
+      # Join Tailnet
+      tailscale up \
+        --auth-key="file:$auth_file" \
+        --hostname={{ kt_hub_hostname | quote }} \
+        --advertise-tags={{ kt_tailscale_tag | quote }} \
+        --ssh
+
+      echo KT_CHANGED
+    fi
+
+  register: kt_tailnet_join
+  changed_when: "'KT_CHANGED' in kt_tailnet_join.stdout"
+  no_log: true
+
+
+# ======================================
+# 7. Tailscale SSH
+# ======================================
+
+- name: Enable Tailscale SSH when allowed
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! tailscale debug prefs | grep -Eq '"RunSSH"[[:space:]]*:[[:space:]]*true'; then
+      tailscale set --ssh
+      echo KT_CHANGED
+    fi
+
+  register: kt_tailscale_ssh
+  changed_when: "'KT_CHANGED' in kt_tailscale_ssh.stdout"
+  when: kt_allow_enable_tailscale_ssh | bool
+
+
+# ======================================
+# 8. Monitoring Images
+# ======================================
+
+- name: Pull only missing monitoring images
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! docker image inspect {{ item | quote }} >/dev/null 2>&1; then
+      docker pull {{ item | quote }}
+      echo KT_CHANGED
+    fi
+
+  loop: "{{ kt_monitor_images }}"
+  register: kt_image_pull
+  changed_when: "'KT_CHANGED' in kt_image_pull.stdout"
+
+
+# ======================================
+# 9. Result
+# ======================================
+
+- name: Check KT Hub configuration
+  ansible.builtin.raw: |
+    set -eu
+
+    echo "===== Hostname ====="
+    hostname
+
+    echo "===== Docker ====="
+    docker --version
+    docker compose version
+    rpm -q containerd.io
+
+    echo "===== Docker Service ====="
+    systemctl is-active docker
+    systemctl is-enabled docker
+
+    echo "===== Tailscale ====="
+    tailscale version | head -n 1
+    tailscale ip -4
+
+    echo "===== Tailscale Service ====="
+    systemctl is-active tailscaled
+    systemctl is-enabled tailscaled
+
+    echo "===== Monitoring Images ====="
+    docker image ls
+
+  register: kt_hub_result
+  changed_when: false
+
+
+- name: Display KT Hub result
+  ansible.builtin.debug:
+    msg: "{{ kt_hub_result.stdout_lines }}"

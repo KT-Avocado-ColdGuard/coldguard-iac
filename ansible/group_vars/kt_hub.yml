@@ -1,0 +1,49 @@
+---
+# ======================================
+# Hostname
+# ======================================
+
+kt_hub_hostname: "coldguard-kt-hub"
+
+
+# ======================================
+# Docker
+# ======================================
+
+kt_docker_version: "29.10.0"
+kt_containerd_version: "2.4.2"
+kt_compose_version: "5.8.0"
+
+kt_docker_repo_url: "https://download.docker.com/linux/rhel/docker-ce.repo"
+
+
+# ======================================
+# Tailscale
+# ======================================
+
+kt_tailscale_version: "1.104.7"
+
+kt_tailscale_repo_url: "https://pkgs.tailscale.com/stable/rhel/8/tailscale.repo"
+
+kt_tailscale_tag: "tag:kt-hub"
+
+# 최초 Tailnet 가입에 사용할 인증 키 파일
+# 기존 가입된 KT Hub에서는 사용하지 않음
+kt_tailscale_authkey_file: "/root/.kt-hub-tailscale-authkey"
+
+# 기존 가입 장비의 SSH 설정을 자동 변경할지
+# 기본값 false: 기존 SSH 설정 유지
+kt_allow_enable_tailscale_ssh: false
+
+
+# ======================================
+# Monitoring Images
+# ======================================
+
+kt_monitor_images:
+  - "prom/prometheus:v3.13.5"
+  - "prom/alertmanager:v0.35.0"
+  - "grafana/loki:3.7.9"
+  - "grafana/grafana:13.3.1"
+  - "prom/blackbox-exporter:v0.29.1"
+  - "prom/node-exporter:v1.12.1"
