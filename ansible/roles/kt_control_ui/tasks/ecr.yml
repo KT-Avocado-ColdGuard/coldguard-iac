@@ -1,0 +1,125 @@
+---
+# ==========================================
+# Check Required Variables
+# ==========================================
+
+- name: Validate ECR configuration
+  ansible.builtin.assert:
+    that:
+      - kt_ecr_access_key_id | default('') | length > 0
+      - kt_ecr_secret_access_key | default('') | length > 0
+      - kt_ui_ecr_registry | default('') | length > 0
+      - kt_ui_image_digest is match('^sha256:[0-9a-f]{64}$')
+    fail_msg: "Required ECR configuration is missing or invalid"
+  no_log: true
+
+
+# ==========================================
+# Check Control UI Image
+# ==========================================
+
+- name: Check Control UI image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ kt_ui_image_uri }}"
+  register: kt_ui_image_check
+  changed_when: false
+  failed_when: >
+    kt_ui_image_check.rc != 0 and
+    'no such image' not in (kt_ui_image_check.stderr | lower) and
+    'no such object' not in (kt_ui_image_check.stderr | lower)
+
+
+# ==========================================
+# ECR Login and Image Pull
+# ==========================================
+
+- name: Pull Control UI image only when missing
+  when: kt_ui_image_check.rc != 0
+
+  block:
+
+    - name: Create temporary Docker authentication directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: coldguard-ecr-
+      register: kt_ui_docker_auth_tmp
+
+    - name: Initialize isolated Docker configuration
+      ansible.builtin.copy:
+        content: "{{ {'auths': {kt_ui_ecr_registry: {}}} | to_json }}"
+        dest: "{{ kt_ui_docker_auth_tmp.path }}/config.json"
+        mode: "0600"
+
+    - name: Get ECR authentication token
+      ansible.builtin.command:
+        argv:
+          - "{{ kt_ui_aws_cli_binary }}"
+          - ecr
+          - get-login-password
+          - --region
+          - "{{ kt_ui_aws_region }}"
+      environment:
+        AWS_ACCESS_KEY_ID: "{{ kt_ecr_access_key_id }}"
+        AWS_SECRET_ACCESS_KEY: "{{ kt_ecr_secret_access_key }}"
+        AWS_SESSION_TOKEN: ""
+        AWS_DEFAULT_REGION: "{{ kt_ui_aws_region }}"
+        AWS_EC2_METADATA_DISABLED: "true"
+        AWS_PAGER: ""
+      register: kt_ui_ecr_token
+      changed_when: false
+      no_log: true
+
+    - name: Login to AWS ECR
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --config
+          - "{{ kt_ui_docker_auth_tmp.path }}"
+          - login
+          - --username
+          - AWS
+          - --password-stdin
+          - "{{ kt_ui_ecr_registry }}"
+        stdin: "{{ kt_ui_ecr_token.stdout }}"
+      no_log: true
+
+    - name: Pull Control UI image by digest
+      ansible.builtin.command:
+        argv:
+          - docker
+          - --config
+          - "{{ kt_ui_docker_auth_tmp.path }}"
+          - pull
+          - "{{ kt_ui_image_uri }}"
+
+  always:
+
+    - name: Remove temporary Docker authentication directory
+      ansible.builtin.file:
+        path: "{{ kt_ui_docker_auth_tmp.path }}"
+        state: absent
+      when:
+        - kt_ui_docker_auth_tmp is defined
+        - kt_ui_docker_auth_tmp.path is defined
+
+
+# ==========================================
+# Verify Control UI Image
+# ==========================================
+
+- name: Verify Control UI image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ kt_ui_image_uri }}"
+  changed_when: false
+
+- name: Display verified Control UI image
+  ansible.builtin.debug:
+    msg: "{{ kt_ui_image_uri }}"

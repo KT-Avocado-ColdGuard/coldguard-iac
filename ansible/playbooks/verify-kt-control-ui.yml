@@ -1,0 +1,437 @@
+---
+- name: Verify KT Cloud Control UI
+  hosts: coldguard-kt-hub
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/kt_control_ui.yml
+
+  vars:
+    ansible_python_interpreter: "{{ kt_ui_python_path }}"
+
+    kt_ui_expected_accounts:
+      - cloud
+      - monitoring
+      - security
+
+    kt_ui_expected_monitoring_containers:
+      - coldguard-hub-grafana-1
+      - coldguard-hub-loki-1
+      - coldguard-hub-alertmanager-1
+      - coldguard-hub-prometheus-1
+      - coldguard-hub-blackbox-1
+      - coldguard-hub-node-exporter-1
+
+  tasks:
+
+    # ======================================
+    # Verify Python and AWS CLI
+    # ======================================
+
+    - name: Check Python version
+      ansible.builtin.command:
+        argv:
+          - "{{ kt_ui_python_path }}"
+          - --version
+      register: kt_ui_python_check
+      changed_when: false
+
+    - name: Check AWS CLI version
+      ansible.builtin.command:
+        argv:
+          - "{{ kt_ui_aws_cli_binary }}"
+          - --version
+      register: kt_ui_aws_check
+      changed_when: false
+
+    - name: Verify installed versions
+      ansible.builtin.assert:
+        that:
+          - kt_ui_python_check.stdout.startswith('Python 3.12.')
+          - kt_ui_aws_check.stdout.startswith('aws-cli/' ~ kt_ui_aws_cli_version ~ ' ')
+
+
+    # ======================================
+    # Verify System Services
+    # ======================================
+
+    - name: Check running system services
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ item }}"
+      loop:
+        - docker
+        - tailscaled
+      changed_when: false
+
+    - name: Check enabled system services
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-enabled
+          - "{{ item }}"
+      loop:
+        - docker
+        - tailscaled
+      changed_when: false
+
+
+    # ======================================
+    # Verify ECR Image and Docker Network
+    # ======================================
+
+    - name: Verify Control UI image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - image
+          - inspect
+          - "{{ kt_ui_image_uri }}"
+      changed_when: false
+
+    - name: Verify monitoring network
+      ansible.builtin.command:
+        argv:
+          - docker
+          - network
+          - inspect
+          - "{{ kt_ui_monitoring_network }}"
+      changed_when: false
+
+
+    # ======================================
+    # Verify Secrets Permissions
+    # ======================================
+
+    - name: Check secrets directory and files
+      ansible.builtin.stat:
+        path: "{{ item.path }}"
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      loop:
+        - path: "{{ kt_ui_secrets_dir }}"
+          mode: "0700"
+          directory: true
+
+        - path: "{{ kt_ui_secrets_dir }}/api-key"
+          mode: "0600"
+          directory: false
+
+        - path: "{{ kt_ui_secrets_dir }}/accounts.json"
+          mode: "0600"
+          directory: false
+
+      register: kt_ui_secrets_check
+
+    - name: Verify secrets ownership and permissions
+      ansible.builtin.assert:
+        that:
+          - item.stat.exists
+          - item.stat.uid == (kt_ui_uid | int)
+          - item.stat.gid == (kt_ui_gid | int)
+          - item.stat.mode == item.item.mode
+          - item.stat.isdir == item.item.directory
+          - item.item.directory or item.stat.isreg
+          - item.item.directory or item.stat.size > 0
+        fail_msg: "Invalid secrets file or directory"
+      loop: "{{ kt_ui_secrets_check.results }}"
+      loop_control:
+        label: "{{ item.item.path }}"
+
+
+    # ======================================
+    # Verify Registered Accounts
+    # ======================================
+
+    - name: Check registered account names
+      ansible.builtin.command:
+        argv:
+          - "{{ kt_ui_python_path }}"
+          - -c
+          - |
+            import json
+            import sys
+
+            with open(sys.argv[1]) as f:
+                accounts = json.load(f)
+
+            assert isinstance(accounts, dict)
+            assert all(
+                isinstance(v, str) and v.startswith("scrypt:")
+                for v in accounts.values()
+            )
+
+            print(json.dumps(sorted(accounts.keys())))
+          - "{{ kt_ui_secrets_dir }}/accounts.json"
+      register: kt_ui_accounts_check
+      changed_when: false
+
+    - name: Verify registered accounts
+      ansible.builtin.assert:
+        that:
+          - (kt_ui_accounts_check.stdout | from_json) == (kt_ui_expected_accounts | sort)
+
+
+    # ======================================
+    # Verify Docker Compose
+    # ======================================
+
+    - name: Validate existing compose configuration
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - config
+          - --quiet
+        chdir: "{{ kt_ui_deploy_dir }}"
+      changed_when: false
+
+    - name: Get Control UI container ID
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - ps
+          - -q
+          - "{{ kt_ui_compose_service }}"
+        chdir: "{{ kt_ui_deploy_dir }}"
+      register: kt_ui_container_id
+      changed_when: false
+
+    - name: Verify Control UI container exists
+      ansible.builtin.assert:
+        that:
+          - kt_ui_container_id.stdout_lines | length == 1
+
+    - name: Check Control UI image and health status
+      ansible.builtin.command:
+        argv:
+          - docker
+          - inspect
+          - --format
+          - "{% raw %}{{.Config.Image}} {{.State.Status}} {{.State.Health.Status}}{% endraw %}"
+          - "{{ kt_ui_container_id.stdout | trim }}"
+      register: kt_ui_container_status
+      changed_when: false
+
+    - name: Verify Control UI container status
+      ansible.builtin.assert:
+        that:
+          - kt_ui_container_status.stdout == (kt_ui_image_uri ~ ' running healthy')
+
+
+    # ======================================
+    # Verify Published Ports
+    # ======================================
+
+    - name: Check Control UI published ports
+      ansible.builtin.command:
+        argv:
+          - docker
+          - port
+          - "{{ kt_ui_container_id.stdout | trim }}"
+      register: kt_ui_port_check
+      changed_when: false
+
+    - name: Verify localhost-only binding
+      ansible.builtin.assert:
+        that:
+          - kt_ui_port_check.stdout_lines | length == 1
+          - kt_ui_port_check.stdout == ((kt_ui_http_port | string) ~ '/tcp -> 127.0.0.1:' ~ (kt_ui_http_port | string))
+
+
+    # ======================================
+    # Verify Control API DNS and TLS
+    # ======================================
+
+    - name: Verify Control API DNS and TLS connection
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - exec
+          - -T
+          - "{{ kt_ui_compose_service }}"
+          - python
+          - -c
+          - |
+            import socket
+            import ssl
+            import sys
+            from urllib.parse import urlparse
+
+            url = urlparse(sys.argv[1])
+            host = url.hostname
+            port = url.port or 443
+
+            print("DNS:", socket.gethostbyname(host))
+
+            with socket.create_connection((host, port), timeout=5) as sock:
+                with ssl.create_default_context().wrap_socket(
+                    sock, server_hostname=host
+                ) as tls:
+                    print("TLS:", tls.version())
+          - "{{ kt_ui_control_api_url }}"
+        chdir: "{{ kt_ui_deploy_dir }}"
+      register: kt_ui_api_connection
+      changed_when: false
+
+    - name: Display Control API connection
+      ansible.builtin.debug:
+        var: kt_ui_api_connection.stdout_lines
+
+
+    # ======================================
+    # Verify Control UI Metrics
+    # ======================================
+
+    - name: Verify Control UI metrics endpoint
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - exec
+          - -T
+          - "{{ kt_ui_compose_service }}"
+          - python
+          - -c
+          - |
+            import sys
+            import urllib.request
+
+            url = "http://127.0.0.1:" + sys.argv[1] + "/metrics"
+
+            with urllib.request.urlopen(url, timeout=5) as response:
+                metrics = response.read().decode()
+
+                assert response.status == 200
+                assert "coldguard_ui_logins_total" in metrics
+                assert "coldguard_ui_commands_total" in metrics
+
+                print("Metrics HTTP status:", response.status)
+          - "{{ kt_ui_metrics_port | string }}"
+        chdir: "{{ kt_ui_deploy_dir }}"
+      changed_when: false
+
+    - name: Verify Prometheus access to Control UI metrics
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - coldguard-hub-prometheus-1
+          - wget
+          - -q
+          - -O
+          - /dev/null
+          - "http://{{ kt_ui_compose_service }}:{{ kt_ui_metrics_port }}/metrics"
+      changed_when: false
+
+
+    # ======================================
+    # Verify Tailscale Serve and Funnel
+    # ======================================
+
+    - name: Check Tailscale Serve configuration
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - serve
+          - status
+          - --json
+      register: kt_ui_serve_check
+      changed_when: false
+
+    - name: Parse Tailscale Serve configuration
+      ansible.builtin.set_fact:
+        kt_ui_serve_config: "{{ kt_ui_serve_check.stdout | from_json }}"
+
+    - name: Verify HTTPS proxy and disabled Funnel
+      ansible.builtin.assert:
+        that:
+          - >
+            kt_ui_serve_config.get('TCP', {}) ==
+            {(kt_ui_https_port | string): {'HTTPS': true}}
+          - >
+            kt_ui_serve_config.get('Web', {}) ==
+            {kt_ui_serve_web_key:
+            {'Handlers': {'/': {'Proxy': kt_ui_backend_url}}}}
+          - >
+            kt_ui_serve_config.get('AllowFunnel', {}).values()
+            | select('equalto', true) | list | length == 0
+
+
+    # ======================================
+    # Verify HTTP and HTTPS Health
+    # ======================================
+
+    - name: Verify Control UI health endpoints
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        method: GET
+        status_code: 200
+        timeout: 10
+        validate_certs: true
+        use_proxy: false
+        return_content: true
+      loop:
+        - "http://127.0.0.1:{{ kt_ui_http_port }}/healthz"
+        - "{{ kt_ui_serve_url }}/healthz"
+      register: kt_ui_health_checks
+      changed_when: false
+
+    - name: Verify health response bodies
+      ansible.builtin.assert:
+        that:
+          - item.json.status == 'ok'
+      loop: "{{ kt_ui_health_checks.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+
+    # ======================================
+    # Verify Existing Monitoring Containers
+    # ======================================
+
+    - name: Check running containers
+      ansible.builtin.command:
+        argv:
+          - docker
+          - ps
+          - --format
+          - "{% raw %}{{.Names}}{% endraw %}"
+      register: kt_ui_running_containers
+      changed_when: false
+
+    - name: Verify existing monitoring containers
+      ansible.builtin.assert:
+        that:
+          - >
+            kt_ui_expected_monitoring_containers
+            | difference(kt_ui_running_containers.stdout_lines)
+            | length == 0
+
+
+    # ======================================
+    # Final Verification Result
+    # ======================================
+
+    - name: Display verification result
+      ansible.builtin.debug:
+        msg:
+          - "KT Cloud Control UI verification completed"
+          - "Python and AWS CLI: OK"
+          - "Docker and Tailscale services: OK"
+          - "ECR image: OK"
+          - "Secrets permissions: OK"
+          - "Registered accounts: OK"
+          - "Control UI container: HEALTHY"
+          - "Control API DNS and TLS: OK"
+          - "Metrics and Prometheus access: OK"
+          - "Tailscale Serve: OK"
+          - "Tailscale Funnel: DISABLED"
+          - "HTTP and HTTPS health: OK"
+          - "Existing monitoring containers: OK"
+          - "Control UI URL: {{ kt_ui_serve_url }}/"

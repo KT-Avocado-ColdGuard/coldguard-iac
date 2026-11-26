@@ -1,0 +1,111 @@
+---
+# ==========================================
+# Configure Tailscale Serve
+# ==========================================
+
+- name: Configure Control UI HTTPS proxy
+
+  vars:
+    kt_ui_expected_tcp: >-
+      {{ {(kt_ui_https_port | string): {'HTTPS': true}} }}
+
+    kt_ui_expected_web: >-
+      {{ {kt_ui_serve_web_key:
+          {'Handlers': {'/': {'Proxy': kt_ui_backend_url}}}} }}
+
+    kt_ui_expected_web_no_slash: >-
+      {{ {kt_ui_serve_web_key:
+          {'Handlers': {'/':
+          {'Proxy': kt_ui_backend_url | regex_replace('/$', '')}}}} }}
+
+  block:
+
+    # ======================================
+    # Check Existing Configuration
+    # ======================================
+
+    - name: Check existing Tailscale Serve configuration
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - serve
+          - status
+          - --json
+      register: kt_ui_serve_status
+      changed_when: false
+
+    - name: Parse Tailscale Serve configuration
+      ansible.builtin.set_fact:
+        kt_ui_serve_current: "{{ kt_ui_serve_status.stdout | from_json }}"
+
+    # ======================================
+    # Prevent Configuration Conflicts
+    # ======================================
+
+    - name: Validate existing Tailscale Serve configuration
+      ansible.builtin.assert:
+        that:
+          - >
+            kt_ui_serve_current == {} or
+            (
+              kt_ui_serve_current.get('TCP', {}) == kt_ui_expected_tcp
+              and
+              kt_ui_serve_current.get('Web', {}) in
+              [kt_ui_expected_web, kt_ui_expected_web_no_slash]
+            )
+          - >
+            kt_ui_serve_current.get('AllowFunnel', {}).values()
+            | select('equalto', true) | list | length == 0
+          - >
+            kt_ui_serve_current.keys() | list
+            | difference(['TCP', 'Web', 'AllowFunnel'])
+            | length == 0
+        fail_msg: "Conflicting Tailscale Serve or Funnel configuration detected"
+
+    # ======================================
+    # Enable Tailscale Serve
+    # ======================================
+
+    - name: Enable Control UI HTTPS proxy
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - serve
+          - --bg
+          - "--https={{ kt_ui_https_port }}"
+          - "{{ kt_ui_backend_url }}"
+      when: kt_ui_serve_current == {}
+
+    # ======================================
+    # Verify Final Configuration
+    # ======================================
+
+    - name: Check final Tailscale Serve configuration
+      ansible.builtin.command:
+        argv:
+          - tailscale
+          - serve
+          - status
+          - --json
+      register: kt_ui_serve_final_status
+      changed_when: false
+
+    - name: Parse final Tailscale Serve configuration
+      ansible.builtin.set_fact:
+        kt_ui_serve_final: "{{ kt_ui_serve_final_status.stdout | from_json }}"
+
+    - name: Verify Control UI HTTPS proxy configuration
+      ansible.builtin.assert:
+        that:
+          - kt_ui_serve_final.get('TCP', {}) == kt_ui_expected_tcp
+          - >
+            kt_ui_serve_final.get('Web', {}) in
+            [kt_ui_expected_web, kt_ui_expected_web_no_slash]
+          - >
+            kt_ui_serve_final.get('AllowFunnel', {}).values()
+            | select('equalto', true) | list | length == 0
+        fail_msg: "Control UI HTTPS proxy verification failed"
+
+    - name: Display Control UI HTTPS URL
+      ansible.builtin.debug:
+        msg: "{{ kt_ui_serve_url }}/"

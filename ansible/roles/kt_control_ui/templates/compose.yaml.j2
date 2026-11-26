@@ -1,0 +1,56 @@
+name: {{ kt_ui_compose_project }}
+
+services:
+  {{ kt_ui_compose_service }}:
+    image: "{{ kt_ui_image_uri }}"
+    pull_policy: never
+
+    user: "{{ kt_ui_uid }}:{{ kt_ui_gid }}"
+
+    # Gunicorn
+    command: ["python", "-m", "gunicorn",
+              "--bind", "0.0.0.0:{{ kt_ui_http_port }}",
+              "--workers", "1",
+              "--worker-class", "gthread",
+              "--threads", "8",
+              "--worker-tmp-dir", "/tmp",
+              "--graceful-timeout", "20",
+              "--no-control-socket",
+              "control_ui.app:create_app()"]
+
+    # Application Configuration
+    environment:
+      CONTROL_API_URL: "{{ kt_ui_control_api_url }}"
+      STALE_SEC: "{{ kt_ui_stale_sec }}"
+      GRAFANA_DEVICE_URL: "{{ kt_ui_grafana_device_url }}"
+      METRICS_PORT: "{{ kt_ui_metrics_port }}"
+
+    # Secrets
+    volumes:
+      - "{{ kt_ui_secrets_dir }}:/etc/control-ui:ro"
+
+    # Local HTTP Port
+    ports:
+      - "127.0.0.1:{{ kt_ui_http_port }}:{{ kt_ui_http_port }}"
+
+    # Monitoring Network
+    networks: [monitoring]
+
+    # Container Security
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+
+    # Health Check
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:{{ kt_ui_http_port }}/healthz"]
+      interval: 30s
+      timeout: 5s
+
+    restart: unless-stopped
+
+networks:
+  monitoring:
+    external: true
+    name: "{{ kt_ui_monitoring_network }}"
