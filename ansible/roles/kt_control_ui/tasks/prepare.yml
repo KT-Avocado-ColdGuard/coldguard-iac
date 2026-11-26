@@ -1,0 +1,158 @@
+---
+# ======================================
+# Install Python 3.12
+# ======================================
+
+- name: Install Python 3.12 only when missing
+  ansible.builtin.raw: |
+    set -e
+
+    if [ ! -x "{{ kt_ui_python_path }}" ]; then
+      dnf install -y python3.12
+      echo "PYTHON_INSTALLED"
+    else
+      echo "PYTHON_ALREADY_INSTALLED"
+    fi
+  register: kt_ui_python_install
+  changed_when: "'PYTHON_INSTALLED' in kt_ui_python_install.stdout"
+
+# ======================================
+# Verify Python
+# ======================================
+
+- name: Check Python version
+  ansible.builtin.command:
+    argv:
+      - "{{ kt_ui_python_path }}"
+      - --version
+  register: kt_ui_python_version
+  changed_when: false
+
+- name: Display Python version
+  ansible.builtin.debug:
+    msg: "{{ kt_ui_python_version.stdout }}"
+
+# ==========================================
+# Check AWS CLI Installation
+# ==========================================
+
+- name: Check AWS CLI installation
+  ansible.builtin.stat:
+    path: "{{ kt_ui_aws_cli_binary }}"
+  register: kt_ui_aws_cli_stat
+
+- name: Check installed AWS CLI version
+  ansible.builtin.command:
+    argv:
+      - "{{ kt_ui_aws_cli_binary }}"
+      - --version
+  register: kt_ui_aws_cli_check
+  changed_when: false
+  when: kt_ui_aws_cli_stat.stat.exists
+
+
+# ==========================================
+# Install AWS CLI
+# ==========================================
+
+- name: Install AWS CLI from official ZIP
+  when: >
+    not kt_ui_aws_cli_stat.stat.exists or
+    ('aws-cli/' ~ kt_ui_aws_cli_version ~ ' ')
+    not in (kt_ui_aws_cli_check.stdout | default(''))
+  block:
+
+    - name: Install AWS CLI dependencies
+      ansible.builtin.command:
+        argv:
+          - dnf
+          - install
+          - -y
+          - unzip
+          - groff-base
+          - less
+
+    - name: Create temporary installation directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: awscli
+      register: kt_ui_aws_cli_tmp
+
+    - name: Download AWS CLI installer
+      ansible.builtin.get_url:
+        url: "{{ kt_ui_aws_cli_url }}"
+        dest: "{{ kt_ui_aws_cli_tmp.path }}/awscliv2.zip"
+        mode: "0644"
+        timeout: 120
+
+    - name: Extract AWS CLI installer
+      ansible.builtin.unarchive:
+        src: "{{ kt_ui_aws_cli_tmp.path }}/awscliv2.zip"
+        dest: "{{ kt_ui_aws_cli_tmp.path }}"
+        remote_src: true
+
+    - name: Install or update AWS CLI
+      ansible.builtin.command:
+        argv:
+          - "{{ kt_ui_aws_cli_tmp.path }}/aws/install"
+          - --install-dir
+          - "{{ kt_ui_aws_cli_install_dir }}"
+          - --bin-dir
+          - "{{ kt_ui_aws_cli_bin_dir }}"
+          - --update
+
+  always:
+
+    - name: Remove temporary installation directory
+      ansible.builtin.file:
+        path: "{{ kt_ui_aws_cli_tmp.path }}"
+        state: absent
+      when:
+        - kt_ui_aws_cli_tmp is defined
+        - kt_ui_aws_cli_tmp.path is defined
+
+
+# ==========================================
+# Verify AWS CLI
+# ==========================================
+
+- name: Verify AWS CLI version
+  ansible.builtin.command:
+    argv:
+      - "{{ kt_ui_aws_cli_binary }}"
+      - --version
+  register: kt_ui_aws_cli_verify
+  changed_when: false
+  failed_when: >
+    kt_ui_aws_cli_verify.rc != 0 or
+    ('aws-cli/' ~ kt_ui_aws_cli_version ~ ' ')
+    not in kt_ui_aws_cli_verify.stdout
+
+- name: Display AWS CLI version
+  ansible.builtin.debug:
+    msg: "{{ kt_ui_aws_cli_verify.stdout }}"
+
+# ==========================================
+# Create Deployment Directory
+# ==========================================
+
+- name: Create Control UI deployment directory
+  ansible.builtin.file:
+    path: "{{ kt_ui_deploy_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+
+# ==========================================
+# Create Secrets Directory
+# ==========================================
+
+- name: Create Control UI secrets directory
+  ansible.builtin.file:
+    path: "{{ kt_ui_secrets_dir }}"
+    state: directory
+    owner: "{{ kt_ui_uid }}"
+    group: "{{ kt_ui_gid }}"
+    mode: "0700"

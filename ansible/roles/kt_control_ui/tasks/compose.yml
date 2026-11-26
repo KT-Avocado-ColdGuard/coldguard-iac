@@ -1,0 +1,119 @@
+---
+# ==========================================
+# Verify Monitoring Network
+# ==========================================
+
+- name: Verify existing monitoring network
+  ansible.builtin.command:
+    argv:
+      - docker
+      - network
+      - inspect
+      - "{{ kt_ui_monitoring_network }}"
+  changed_when: false
+
+
+# ==========================================
+# Deploy Docker Compose
+# ==========================================
+
+- name: Deploy Control UI compose file
+  ansible.builtin.template:
+    src: compose.yaml.j2
+    dest: "{{ kt_ui_deploy_dir }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate Control UI compose configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - config
+      - --quiet
+    chdir: "{{ kt_ui_deploy_dir }}"
+  changed_when: false
+
+
+# ==========================================
+# Check Container Before Deployment
+# ==========================================
+
+- name: Check Control UI container state before deployment
+  ansible.builtin.command:
+    argv:
+      - docker
+      - ps
+      - -a
+      - --no-trunc
+      - --filter
+      - "label=com.docker.compose.project={{ kt_ui_compose_project }}"
+      - --filter
+      - "label=com.docker.compose.service={{ kt_ui_compose_service }}"
+      - --format
+      - "{% raw %}{{.ID}} {{.State}}{% endraw %}"
+  register: kt_ui_container_before
+  changed_when: false
+
+
+# ==========================================
+# Start Control UI
+# ==========================================
+
+- name: Start Control UI container
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - up
+      - -d
+      - --pull
+      - never
+      - --wait
+      - --wait-timeout
+      - "120"
+    chdir: "{{ kt_ui_deploy_dir }}"
+  changed_when: false
+
+
+# ==========================================
+# Check Container After Deployment
+# ==========================================
+
+- name: Check Control UI container state after deployment
+  ansible.builtin.command:
+    argv:
+      - docker
+      - ps
+      - -a
+      - --no-trunc
+      - --filter
+      - "label=com.docker.compose.project={{ kt_ui_compose_project }}"
+      - --filter
+      - "label=com.docker.compose.service={{ kt_ui_compose_service }}"
+      - --format
+      - "{% raw %}{{.ID}} {{.State}}{% endraw %}"
+  register: kt_ui_container_after
+  changed_when: >
+    kt_ui_container_before.stdout !=
+    kt_ui_container_after.stdout
+
+
+# ==========================================
+# Verify Control UI Health
+# ==========================================
+
+- name: Verify Control UI health endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ kt_ui_http_port }}/healthz"
+    method: GET
+    status_code: 200
+    timeout: 5
+    use_proxy: false
+  register: kt_ui_health
+  changed_when: false
+
+- name: Display Control UI health status
+  ansible.builtin.debug:
+    msg: "Control UI health check: HTTP {{ kt_ui_health.status }}"

@@ -1,0 +1,14 @@
+---
+- name: Configure KT Cloud Control UI
+  hosts: coldguard-kt-hub
+  gather_facts: false
+
+  vars_files:
+    - ../group_vars/kt_control_ui.yml
+    - ../group_vars/kt_control_ui_vault.yml
+
+  vars:
+    ansible_python_interpreter: "{{ kt_ui_python_path }}"
+
+  roles:
+    - kt_control_ui

@@ -1,0 +1,36 @@
+---
+# ======================================
+# Prepare Environment
+# ======================================
+
+- name: Prepare Control UI environment
+  ansible.builtin.import_tasks: prepare.yml
+
+# ==========================================
+# ECR Authentication and Image Pull
+# ==========================================
+
+- name: Prepare Control UI image
+  ansible.builtin.import_tasks: ecr.yml
+
+# ==========================================
+# Deploy Secrets
+# ==========================================
+
+- name: Deploy Control UI secrets
+  ansible.builtin.import_tasks: secrets.yml
+
+
+# ==========================================
+# Deploy Docker Compose
+# ==========================================
+
+- name: Deploy Control UI container
+  ansible.builtin.import_tasks: compose.yml
+
+# ==========================================
+# Configure Tailscale Serve
+# ==========================================
+
+- name: Configure Control UI Tailscale Serve
+  ansible.builtin.import_tasks: serve.yml

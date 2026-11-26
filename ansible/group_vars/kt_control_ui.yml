@@ -1,0 +1,111 @@
+# ======================================
+# Python
+# ======================================
+
+kt_ui_python_path: /usr/bin/python3.12
+
+# ======================================
+# Deployment Directory
+# ======================================
+
+kt_ui_deploy_dir: /opt/coldguard-control-ui
+kt_ui_secrets_dir: "{{ kt_ui_deploy_dir }}/secrets"
+
+# ======================================
+# Container User
+# ======================================
+
+kt_ui_uid: 10001
+kt_ui_gid: 10001
+
+# ======================================
+# Docker Network
+# ======================================
+
+kt_ui_monitoring_network: coldguard-hub_default
+
+# ======================================
+# Tailscale Serve
+# ======================================
+
+kt_ui_https_port: 8080
+kt_ui_http_port: 8081
+kt_ui_backend_url: "http://127.0.0.1:{{ kt_ui_http_port }}/"
+
+# ======================================
+# Metrics
+# ======================================
+
+kt_ui_metrics_port: 9205
+
+# ======================================
+# AWS ECR
+# ======================================
+
+kt_ui_aws_region: ap-northeast-2
+kt_ui_ecr_repository: coldguard-prod-control-ui
+
+# ======================================
+# AWS CLI
+# ======================================
+
+kt_ui_aws_cli_version: "2.42.3"
+
+kt_ui_aws_cli_binary: /usr/local/bin/aws
+kt_ui_aws_cli_install_dir: /usr/local/aws-cli
+kt_ui_aws_cli_bin_dir: /usr/local/bin
+
+kt_ui_aws_cli_url: "https://awscli.amazonaws.com/awscli-exe-linux-x86_64-{{ kt_ui_aws_cli_version }}.zip"
+
+# ======================================
+# Control UI Image
+# ======================================
+
+kt_ui_image_tag: "d85723d18f4a0d206efbcc6dc71e9fcb7c166c7f"
+
+kt_ui_image_digest: "sha256:b23466719d492c91d3ddad1c7e2dbd60bb47daf87db9a62016dd04ea80e859e8"
+
+# ======================================
+# Control UI Configuration
+# ======================================
+
+kt_ui_stale_sec: 10
+
+
+# ======================================
+# ECR Registry
+# ======================================
+
+kt_ui_ecr_registry: "921677330384.dkr.ecr.ap-northeast-2.amazonaws.com"
+
+kt_ui_image_uri: "{{ kt_ui_ecr_registry }}/{{ kt_ui_ecr_repository }}@{{ kt_ui_image_digest }}"
+
+
+# ======================================
+# Docker Compose
+# ======================================
+
+kt_ui_compose_project: coldguard-control-ui
+kt_ui_compose_service: control-ui
+
+
+# ======================================
+# Control API and Grafana
+# ======================================
+
+kt_ui_tailnet_domain: "taile93bf3.ts.net"
+
+kt_ui_control_api_url: "https://control-api.{{ kt_ui_tailnet_domain }}"
+
+kt_ui_grafana_device_url: "http://coldguard-kt-hub.{{ kt_ui_tailnet_domain }}:3000/d/cg-dev?var-site={site}&var-device={device}"
+
+
+# ======================================
+# Tailscale Serve URL
+# ======================================
+
+kt_ui_serve_hostname: "coldguard-kt-hub.{{ kt_ui_tailnet_domain }}"
+
+kt_ui_serve_web_key: "{{ kt_ui_serve_hostname }}:{{ kt_ui_https_port }}"
+
+kt_ui_serve_url: "https://{{ kt_ui_serve_web_key }}"
