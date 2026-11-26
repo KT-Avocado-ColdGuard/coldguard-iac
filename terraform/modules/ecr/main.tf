@@ -45,14 +45,15 @@ resource "aws_ecr_lifecycle_policy" "main" {
         }
       },
       {
+        # main 머지마다 CI가 모든 저장소에 새 태그를 올리므로, 배포에 고정된 태그가 밀려 지워지지 않게 넉넉히 둔다.
         rulePriority = 2
-        description  = "Keep latest 10 tagged images"
+        description  = "Keep latest 30 tagged images"
 
         selection = {
           tagStatus      = "tagged"
           tagPatternList = ["*"]
           countType      = "imageCountMoreThan"
-          countNumber    = 10
+          countNumber    = 30
         }
 
         action = {
