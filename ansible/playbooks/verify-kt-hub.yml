@@ -1,0 +1,96 @@
+
+---
+- name: Verify KT Cloud Hub
+  hosts: kt_hub
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ../group_vars/kt_hub.yml
+
+  tasks:
+
+    # ======================================
+    # 1. Hostname
+    # ======================================
+
+    - name: Check Hostname
+      ansible.builtin.raw: hostnamectl --static
+      register: hostname_result
+      changed_when: false
+
+
+    # ======================================
+    # 2. Installed Packages
+    # ======================================
+
+    - name: Check installed packages
+      ansible.builtin.raw: |
+        for pkg in docker-ce docker-ce-cli containerd.io docker-compose-plugin tailscale; do
+          rpm -q "$pkg" || true
+        done
+      register: package_result
+      changed_when: false
+
+
+    # ======================================
+    # 3. Service Status
+    # ======================================
+
+    - name: Check service status
+      ansible.builtin.raw: |
+        for svc in docker tailscaled; do
+          echo "===== $svc ====="
+          systemctl is-active "$svc" || true
+          systemctl is-enabled "$svc" || true
+        done
+      register: service_result
+      changed_when: false
+
+
+    # ======================================
+    # 4. Tailscale
+    # ======================================
+
+    - name: Check Tailscale
+      ansible.builtin.raw: |
+        tailscale ip -4
+        tailscale debug prefs | grep RunSSH
+      register: tailscale_result
+      changed_when: false
+
+
+    # ======================================
+    # 5. Docker Images
+    # ======================================
+
+    - name: Check monitoring images
+      ansible.builtin.raw: |
+        if docker image inspect {{ item | quote }} >/dev/null 2>&1; then
+          echo "PRESENT: {{ item }}"
+        else
+          echo "MISSING: {{ item }}"
+        fi
+      loop: "{{ kt_monitor_images }}"
+      register: image_result
+      changed_when: false
+
+
+    # ======================================
+    # 6. Display Results
+    # ======================================
+
+    - name: Display verification result
+      ansible.builtin.debug:
+        msg:
+          - "Hostname: {{ hostname_result.stdout_lines }}"
+          - "Packages: {{ package_result.stdout_lines }}"
+          - "Services: {{ service_result.stdout_lines }}"
+          - "Tailscale: {{ tailscale_result.stdout_lines }}"
+
+    - name: Display image result
+      ansible.builtin.debug:
+        msg: "{{ item.stdout_lines }}"
+      loop: "{{ image_result.results }}"
+      loop_control:
+        label: "{{ item.item }}"

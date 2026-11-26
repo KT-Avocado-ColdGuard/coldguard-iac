@@ -1,0 +1,12 @@
+---
+- name: Configure existing KT Cloud Hub safely
+  hosts: kt
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ../group_vars/kt_hub.yml
+    - ../group_vars/vault.yml
+
+  roles:
+    - kt_hub
