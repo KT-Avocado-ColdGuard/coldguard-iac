@@ -67,7 +67,7 @@ notifications:
         discord:
           method: POST
           body: |
-            {"content": {{ printf "[배포 실패] %s\n리비전: %s\n사유: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.sync.revision (regexReplaceAll `[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/` .app.status.operationState.message "") .context.argocdUrl .app.metadata.name | toJson }}}
+            {"content": {{ printf "[배포 실패] %s\n리비전: %s\n사유: %s\n%s/applications/argocd/%s" .app.metadata.name .app.status.sync.revision (regexReplaceAll `[0-9]{12}\.dkr\.ecr\.[a-z0-9-]+\.amazonaws\.com/` (default "" .app.status.operationState.message) "") .context.argocdUrl .app.metadata.name | toJson }}}
     template.app-health-degraded: |
       webhook:
         discord:
