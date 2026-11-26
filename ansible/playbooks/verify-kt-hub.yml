@@ -1,7 +1,7 @@
 
 ---
 - name: Verify KT Cloud Hub
-  hosts: kt_hub
+  hosts: kt
   gather_facts: false
   become: false
 
