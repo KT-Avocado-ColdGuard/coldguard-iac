@@ -10,9 +10,11 @@ locals {
 
   # ECR Repository (이름: <name>-<environment>-<key>)
   # EKS 이미지는 노드 Role(AmazonEC2ContainerRegistryReadOnly)로 받고,
-  # 시설 K3s 이미지는 시설별 Pull 전용 IAM 사용자로 받습니다.
+  # 시설 K3s 이미지는 시설별 Pull 전용 IAM 사용자로,
+  # KT 허브 docker 이미지(통제 UI)는 허브 전용 Pull IAM 사용자로 받습니다.
   ecr_eks_repositories    = ["control-api", "central-worker"]
   ecr_onprem_repositories = ["collector", "controller", "field-web"]
+  ecr_kt_repositories     = ["control-ui"]
 
   # ECR Pull 전용 IAM 사용자를 둘 시설 (MQTT·DB의 site_id와 같은 값)
   onprem_sites = ["site01", "site02"]

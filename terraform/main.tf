@@ -23,7 +23,7 @@ module "security" {
   router_vpc_ingress_enabled = length(var.router_routed_cidrs) > 0
 }
 
-# NAT·Router·Lambda·EKS·GitHub Actions·시설 ECR Pull IAM
+# NAT·Router·Lambda·EKS·GitHub Actions·시설/KT 허브 ECR Pull IAM
 module "iam" {
   source = "./modules/iam"
 
@@ -39,6 +39,9 @@ module "iam" {
   # 시설 K3s ECR Pull 전용 IAM 사용자
   onprem_sites               = local.onprem_sites
   onprem_ecr_repository_arns = [for repo in local.ecr_onprem_repositories : module.ecr.repository_arns[repo]]
+
+  # KT 허브 ECR Pull 전용 IAM 사용자 (통제 UI 이미지)
+  kt_hub_ecr_repository_arns = [for repo in local.ecr_kt_repositories : module.ecr.repository_arns[repo]]
 
   kt_hub_probe_namespace = module.monitoring.kt_hub_probe_namespace
   backup_bucket_arn      = module.storage.backup_bucket_arn
@@ -171,7 +174,7 @@ module "ecr" {
   name        = var.name
   environment = var.environment
 
-  repository_names = concat(local.ecr_eks_repositories, local.ecr_onprem_repositories)
+  repository_names = concat(local.ecr_eks_repositories, local.ecr_onprem_repositories, local.ecr_kt_repositories)
 }
 
 # AWS 내부 알림(SNS), KT 허브 상태 알람, Grafana 읽기 전용 IAM

@@ -38,6 +38,12 @@ output "onprem_ecr_pull_user_names" {
   value       = module.iam.onprem_ecr_pull_user_names
 }
 
+# KT 허브 통제 UI 이미지 Pull (액세스 키는 콘솔에서 발급)
+output "kt_hub_ecr_pull_user_name" {
+  description = "KT 허브 ECR Pull 전용 IAM 사용자 (액세스 키는 콘솔에서 발급)"
+  value       = module.iam.kt_hub_ecr_pull_user_name
+}
+
 # 백업·이력 내보내기
 output "backup_bucket_name" {
   description = "백업·이력 내보내기 S3 버킷 이름"

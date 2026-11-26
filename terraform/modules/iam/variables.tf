@@ -54,3 +54,9 @@ variable "onprem_ecr_repository_arns" {
   description = "시설 K3s가 Pull할 ECR Repository ARN 목록"
   type        = list(string)
 }
+
+# KT 허브 ECR Pull 전용 IAM 사용자
+variable "kt_hub_ecr_repository_arns" {
+  description = "KT 허브(docker compose)가 Pull할 ECR Repository ARN 목록"
+  type        = list(string)
+}

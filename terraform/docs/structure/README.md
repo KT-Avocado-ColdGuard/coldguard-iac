@@ -28,7 +28,7 @@ Avocado/
     ├── terraform.tfvars.example          # 입력값 예시
     ├── locals.tf                         # 이름 접두어, 공통 태그, ECR·시설 목록
     ├── main.tf                           # 모듈 연결과 Private 기본 경로
-    ├── outputs.tf                        # 리전, EKS, ECR, GitHub Actions Role, 시설 Pull 사용자 출력
+    ├── outputs.tf                        # 리전, EKS, ECR, GitHub Actions Role, 시설·KT 허브 Pull 사용자 출력
     ├── docs/
     │   ├── variables/README.md           # 변수 및 설정 가이드
     │   └── structure/README.md           # 이 구조·모듈 가이드
@@ -37,14 +37,15 @@ Avocado/
     └── modules/
         ├── network/                      # VPC, Subnet, Route Table, S3 Endpoint
         ├── security/                     # NAT/Router Security Group와 규칙
-        ├── iam/                          # EC2, Lambda, EKS, Pod Identity, GitHub Actions, 시설 ECR Pull IAM
+        ├── iam/                          # EC2, Lambda, EKS, Pod Identity, GitHub Actions, 시설·KT 허브 ECR Pull IAM
         │   ├── main.tf                   # 계정·리전 조회
         │   ├── instance.tf               # NAT·Router Instance Profile, KT 프로브 지표 권한
         │   ├── failover.tf               # Failover Lambda Role
         │   ├── eks.tf                    # EKS Cluster·Node·EBS CSI Role
         │   ├── pod.tf                    # 백업 CronJob Pod Identity Role
         │   ├── github.tf                 # GitHub Actions OIDC·Role
-        │   └── onprem.tf                 # 시설 K3s ECR Pull 전용 IAM 사용자
+        │   ├── onprem.tf                 # 시설 K3s ECR Pull 전용 IAM 사용자
+        │   └── kt.tf                     # KT 허브 ECR Pull 전용 IAM 사용자(통제 UI 이미지)
         ├── nat/                          # NAT 고정 ENI/EIP와 ASG
         │   └── scripts/nat-user-data.sh.tftpl
         ├── router/                       # Tailscale Router EC2, (선택) VPC → tailnet 경로
@@ -76,9 +77,9 @@ Avocado/
 | `backend.tf` | State 저장소 | S3 버킷 `coldguard-prod-tfstate-1q2w3e4r`, key `terraform/terraform.tfstate`, 잠금 파일 사용 |
 | `variables.tf` | Input 선언 | 필수 변수 10개, 선택 변수 6개, `owner` 검증 |
 | `terraform.tfvars.example` | 예시 입력 | 필수 변수 전체와 선택 변수(주석) 예시 |
-| `locals.tf` | 공통 값 | 이름 접두어, `Project`·`Owner`·`Env`·`ManagedBy` 태그, ECR Repository 목록(EKS용·시설용), 시설 목록 |
+| `locals.tf` | 공통 값 | 이름 접두어, `Project`·`Owner`·`Env`·`ManagedBy` 태그, ECR Repository 목록(EKS용·시설용·KT 허브용), 시설 목록 |
 | `main.tf` | 구성 연결 | 10개 모듈 호출, Private Route Table의 NAT ENI 기본 경로 |
-| `outputs.tf` | 사용자 출력 | 리전, EKS, ECR, GitHub Actions Role, 시설 ECR Pull 사용자, 백업 버킷·Role, 알림 토픽, Grafana 사용자, 라우터 공인 IP |
+| `outputs.tf` | 사용자 출력 | 리전, EKS, ECR, GitHub Actions Role, 시설·KT 허브 ECR Pull 사용자, 백업 버킷·Role, 알림 토픽, Grafana 사용자, 라우터 공인 IP |
 | `ColdGuard_Validation_README.md` | 검증 기록 | NAT Failover/Failback과 알림 시험 결과 및 한계 |
 
 ## 모듈별 리소스
@@ -87,12 +88,12 @@ Avocado/
 |---|---|---|---|
 | `network` | VPC, Public/Private Subnet, IGW, Route Table·Association, S3 Gateway Endpoint | 네트워크와 기본 Public 경로 구성 | `security`, `iam`, `nat`, `router`, `failover`, `eks` |
 | `security` | NAT/Router Security Group 및 Ingress/Egress Rule | Private Subnet의 NAT 유입, Router UDP 41641 허용, (선택) VPC 내부 유입 허용 | `network`, `nat`, `router`, `eks` |
-| `iam` | NAT/Router Instance Profile, Router KT 프로브 지표 정책, Failover Lambda Role/Policy, EKS Cluster/Node/EBS CSI Role, 백업 CronJob Role, GitHub Actions OIDC Provider·Role, 시설 ECR Pull IAM 사용자·정책 | 서비스별 실행 권한, CI의 ECR Push·Pull 권한, 시설 K3s의 ECR Pull 권한 | `network`, `ecr`, `storage`, `monitoring`, `nat`, `router`, `failover`, `eks` |
+| `iam` | NAT/Router Instance Profile, Router KT 프로브 지표 정책, Failover Lambda Role/Policy, EKS Cluster/Node/EBS CSI Role, 백업 CronJob Role, GitHub Actions OIDC Provider·Role, 시설·KT 허브 ECR Pull IAM 사용자·정책 | 서비스별 실행 권한, CI의 ECR Push·Pull 권한, 시설 K3s·KT 허브의 ECR Pull 권한 | `network`, `ecr`, `storage`, `monitoring`, `nat`, `router`, `failover`, `eks` |
 | `nat` | 고정 ENI, EIP·Association, Launch Template, ASG | AZ별 NAT EC2 1대 유지, User Data로 IP 전달·`iptables` 설정 | `network`, `security`, `iam`, `failover` |
 | `router` | EC2 Instance, (선택) Private Route Table의 tailnet 경로 | Public Subnet에서 Tailscale과 IP forwarding 설정, tailnet → VPC 서브넷 라우트, KT 허브 프로브 | `network`, `security`, `iam` |
 | `failover` | NAT/Lambda CloudWatch Alarm, Lambda, EventBridge Rule/Target, SQS | NAT ASG 장애 시 반대 AZ ENI로 경로 전환, 장애·복구 알림, 실패 이벤트 보관 | `nat`, `network`, `iam`, `monitoring` |
 | `eks` | EKS Cluster, Managed Node Group, VPC CNI·Pod Identity Agent·EBS CSI Add-on, Access Entry, Pod Identity 연결, 클러스터 SG 443 규칙 | Private Subnet의 Kubernetes Cluster, 관리자 권한, Pod의 AWS 권한, Tailscale 경유 API 접근 | `network`, `iam`, `security`, 루트 NAT 경로 |
-| `ecr` | ECR Repository, Lifecycle Policy | `control-api`, `central-worker`, `collector`, `controller`, `field-web` 저장소, 이미지 스캔 및 이미지 정리 정책 | `iam` |
+| `ecr` | ECR Repository, Lifecycle Policy | `control-api`, `central-worker`, `collector`, `controller`, `field-web`, `control-ui` 저장소, 이미지 스캔 및 이미지 정리 정책 | `iam` |
 | `monitoring` | SNS Topic·이메일 구독, KT 허브 상태 CloudWatch Alarm, Grafana IAM 사용자·정책 | AWS 내부 알림 공용 토픽, KT 허브 장애 감지, KT Grafana의 CloudWatch 조회 | `failover`, `iam` |
 | `storage` | S3 Bucket, 소유권·퍼블릭 차단·버전 관리·암호화·수명 주기·버킷 정책 | MySQL 백업과 이력·감사 로그 내보내기 저장 | `iam` |
 
@@ -104,7 +105,7 @@ Avocado/
 |---|---|---|
 | `network` | `name`, `environment`, `vpc_cidr`, `subnets`, `aws_region` | `vpc_id`, `public_subnet_ids`, `private_subnet_ids`, `igw_id`, `public_route_table_id`, `private_route_table_ids`, `s3_vpc_endpoint_id` |
 | `security` | `name`, `environment`, `vpc_id`, `vpc_cidr`, `subnets`, `router_vpc_ingress_enabled` | `nat_sg_id`, `router_sg_id` |
-| `iam` | `name`, `environment`, `private_route_table_ids`, `github_repository`, `ecr_repository_arns`, `onprem_sites`, `onprem_ecr_repository_arns`, `kt_hub_probe_namespace`, `backup_bucket_arn` | `nat_instance_profile_name`, `router_instance_profile_name`, `failover_lambda_role_arn`, `eks_cluster_role_arn`, `eks_node_role_arn`, `eks_cluster_role_policy_attachment_id`, `eks_node_role_policy_attachment_ids`, `eks_ebs_csi_role_arn`, `github_actions_role_arn`, `backup_role_arn`, `onprem_ecr_pull_user_names` |
+| `iam` | `name`, `environment`, `private_route_table_ids`, `github_repository`, `ecr_repository_arns`, `onprem_sites`, `onprem_ecr_repository_arns`, `kt_hub_ecr_repository_arns`, `kt_hub_probe_namespace`, `backup_bucket_arn` | `nat_instance_profile_name`, `router_instance_profile_name`, `failover_lambda_role_arn`, `eks_cluster_role_arn`, `eks_node_role_arn`, `eks_cluster_role_policy_attachment_id`, `eks_node_role_policy_attachment_ids`, `eks_ebs_csi_role_arn`, `github_actions_role_arn`, `backup_role_arn`, `onprem_ecr_pull_user_names`, `kt_hub_ecr_pull_user_name` |
 | `nat` | `name`, `environment`, `instances`, `public_subnet_ids`, `nat_sg_id`, `vpc_cidr`, `nat_instance_profile_name` | `nat_eni_ids`, `nat_eip_ids`, `nat_public_ips`, `nat_asg_names`, `nat_launch_template_ids` |
 | `router` | `name`, `environment`, `instances`, `public_subnet_ids`, `router_sg_id`, `router_instance_profile_name`, `private_route_table_ids`, `routed_cidrs` | `router_instance_ids`, `router_private_ips`, `router_public_ips`, `router_eni_ids` |
 | `failover` | `name`, `environment`, `nat_asg_names`, `private_route_table_ids`, `nat_eni_ids`, `lambda_role_arn`, `alert_topic_arn` | 없음 |
@@ -113,7 +114,7 @@ Avocado/
 | `monitoring` | `name`, `environment`, `alert_email`, `alert_emails`, `kt_hub_probe_namespace`, `kt_hub_components` | `alert_topic_arn`, `kt_hub_probe_namespace`, `grafana_user_name` |
 | `storage` | `name`, `environment` | `backup_bucket_name`, `backup_bucket_arn` |
 
-`eks`의 노드 관련 Input 5개는 루트 변수 `eks_node_group`에서 전달됩니다. `iam`의 `ecr_repository_arns`는 `ecr` 모듈 Output에서 받으므로 Repository를 추가하면 GitHub Actions Push·Pull 권한도 함께 넓어집니다. `onprem_ecr_repository_arns`는 그중 `ecr_onprem_repositories`에 해당하는 ARN만 골라 넘깁니다.
+`eks`의 노드 관련 Input 5개는 루트 변수 `eks_node_group`에서 전달됩니다. `iam`의 `ecr_repository_arns`는 `ecr` 모듈 Output에서 받으므로 Repository를 추가하면 GitHub Actions Push·Pull 권한도 함께 넓어집니다. `onprem_ecr_repository_arns`는 그중 `ecr_onprem_repositories`에, `kt_hub_ecr_repository_arns`는 `ecr_kt_repositories`에 해당하는 ARN만 골라 넘깁니다.
 
 ## 연결 및 생성 흐름
 
@@ -126,7 +127,7 @@ security + iam → nat/ router
 nat ENI + network Private Route Table → 루트 aws_route.private_nat (기본 경로)
 nat ASG + nat ENI + Route Table ID + IAM Role → failover
 루트 기본 경로 + EKS IAM Role → eks
-루트 locals ECR 목록 → ecr → Repository ARN → iam (GitHub Actions Push·Pull, 시설 Pull 권한)
+루트 locals ECR 목록 → ecr → Repository ARN → iam (GitHub Actions Push·Pull, 시설·KT 허브 Pull 권한)
 monitoring → SNS 토픽 ARN → failover (NAT·Lambda 알람)
 monitoring → KT 프로브 지표 이름공간 → iam (라우터 PutMetricData 권한)
 storage → 백업 버킷 ARN → iam (백업 Role) → eks (Pod Identity 연결)
