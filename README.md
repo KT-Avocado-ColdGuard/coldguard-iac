@@ -117,6 +117,7 @@ eks_public_access_cidrs = ["203.0.113.10/32"]
 | `eks_cluster_viewer_arns` | `[]` | EKS 조회 전용 권한(`AmazonEKSViewPolicy`)을 줄 IAM ARN. Secret 값은 볼 수 없습니다. IAM Identity Center 역할은 IAM 콘솔의 ARN을 경로까지 그대로 넣습니다. |
 | `eks_public_access_enabled` | `true` | Tailscale로 private endpoint 접속을 확인한 뒤 `false`로 바꿉니다. 서브넷 라우터 장애 시 다시 `true`로 바꿔 비상 접속합니다. |
 | `alert_email` | `""` | AWS 내부 알림(NAT 장애 전환, Lambda 오류, KT 허브 상태)을 받을 이메일. apply 후 받은 메일에서 구독을 확인해야 알림이 옵니다. |
+| `alert_emails` | `[]` | 같은 알림을 함께 받을 이메일 목록. 주소마다 구독 확인 메일을 눌러야 합니다. `alert_email`과 같은 주소는 한 번만 구독합니다. |
 | `router_routed_cidrs` | `[]` | Private Subnet에서 서브넷 라우터로 보낼 목적지. VPC 안에서 tailnet으로 직접 나가야 할 때만 넣습니다. EKS는 Tailscale operator egress를 씁니다. |
 | `backup_service_account` | `coldguard` / `s3-backup` | 백업 CronJob의 Namespace와 ServiceAccount. 매니페스트와 이름이 같아야 S3 권한을 받습니다. |
 
@@ -172,7 +173,7 @@ terraform output ecr_repository_urls
 
 | 작업 | 방법 |
 |---|---|
-| 알림 메일 구독 확인 | `alert_email`을 넣었다면 AWS에서 온 메일의 **Confirm subscription**을 누릅니다. 누르지 않으면 알림이 오지 않습니다. |
+| 알림 메일 구독 확인 | `alert_email`·`alert_emails`에 넣은 주소마다 AWS에서 온 메일의 **Confirm subscription**을 누릅니다. 누르지 않으면 그 주소로는 알림이 오지 않습니다. |
 | 시설 ECR Pull 액세스 키 발급 | IAM 콘솔에서 `terraform output onprem_ecr_pull_user_names`의 시설별 사용자마다 액세스 키를 발급해 해당 시설 Ansible vault에 넣습니다. 시설 K3s의 `ecr-credential-provider`가 이 키로 ECR 토큰을 받습니다. |
 | Grafana 액세스 키 발급 | IAM 콘솔에서 `terraform output grafana_user_name` 사용자의 액세스 키를 발급해 KT Grafana의 CloudWatch 데이터 소스에 넣습니다. 비밀값이 State에 남지 않도록 Terraform으로 만들지 않습니다. |
 | 서브넷 라우터 Tailscale 가입 | 라우터 SG에는 SSH가 열려 있지 않습니다. SSM Session Manager로 접속하거나 Ansible의 SSM 연결로 가입시키고, 광고한 경로(`10.80.0.0/16`)는 Tailscale 관리 콘솔에서 승인합니다. |

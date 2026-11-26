@@ -110,7 +110,7 @@ Avocado/
 | `failover` | `name`, `environment`, `nat_asg_names`, `private_route_table_ids`, `nat_eni_ids`, `lambda_role_arn`, `alert_topic_arn` | 없음 |
 | `eks` | `name`, `environment`, `cluster_role_arn`, `node_role_arn`, `private_subnet_ids`, `public_access_enabled`, `public_access_cidrs`, `cluster_admin_arns`, `cluster_viewer_arns`, `pod_identity_associations`, `router_sg_id`, `node_instance_type`, `node_disk_size`, `node_desired_size`, `node_min_size`, `node_max_size`, `ebs_csi_role_arn` | `cluster_name`, `cluster_endpoint`, `cluster_arn`, `node_group_name`, `cluster_security_group_id` |
 | `ecr` | `name`, `environment`, `repository_names` | `repository_urls`, `repository_names`, `repository_arns` |
-| `monitoring` | `name`, `environment`, `alert_email`, `kt_hub_probe_namespace`, `kt_hub_components` | `alert_topic_arn`, `kt_hub_probe_namespace`, `grafana_user_name` |
+| `monitoring` | `name`, `environment`, `alert_email`, `alert_emails`, `kt_hub_probe_namespace`, `kt_hub_components` | `alert_topic_arn`, `kt_hub_probe_namespace`, `grafana_user_name` |
 | `storage` | `name`, `environment` | `backup_bucket_name`, `backup_bucket_arn` |
 
 `eks`의 노드 관련 Input 5개는 루트 변수 `eks_node_group`에서 전달됩니다. `iam`의 `ecr_repository_arns`는 `ecr` 모듈 Output에서 받으므로 Repository를 추가하면 GitHub Actions Push·Pull 권한도 함께 넓어집니다. `onprem_ecr_repository_arns`는 그중 `ecr_onprem_repositories`에 해당하는 ARN만 골라 넘깁니다.

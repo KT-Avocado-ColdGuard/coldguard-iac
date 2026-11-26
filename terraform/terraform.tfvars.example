@@ -179,6 +179,9 @@ github_repo_id    = "1464803157"
 # AWS 내부 알림을 받을 이메일 (apply 후 구독 확인 메일을 눌러야 합니다)
 # alert_email = "you@example.com"
 
+# 함께 받을 이메일 목록 (주소마다 구독 확인 메일을 눌러야 합니다)
+# alert_emails = ["lead@example.com", "member@example.com"]
+
 # Private Subnet에서 서브넷 라우터로 보낼 목적지 (기본값은 비어 있음)
 # VPC 안에서 tailnet으로 직접 나가야 할 때만 넣습니다. EKS는 Tailscale operator egress를 씁니다.
 # router_routed_cidrs = ["100.64.0.0/10"]
