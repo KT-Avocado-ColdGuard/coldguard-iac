@@ -89,3 +89,9 @@ output "onprem_ecr_pull_user_names" {
     site => user.name
   }
 }
+
+# KT 허브 ECR Pull 전용 IAM 사용자
+output "kt_hub_ecr_pull_user_name" {
+  description = "KT 허브 ECR Pull 전용 IAM 사용자 이름"
+  value       = aws_iam_user.kt_hub_ecr_pull.name
+}

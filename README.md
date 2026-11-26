@@ -175,6 +175,7 @@ terraform output ecr_repository_urls
 |---|---|
 | 알림 메일 구독 확인 | `alert_email`·`alert_emails`에 넣은 주소마다 AWS에서 온 메일의 **Confirm subscription**을 누릅니다. 누르지 않으면 그 주소로는 알림이 오지 않습니다. |
 | 시설 ECR Pull 액세스 키 발급 | IAM 콘솔에서 `terraform output onprem_ecr_pull_user_names`의 시설별 사용자마다 액세스 키를 발급해 해당 시설 Ansible vault에 넣습니다. 시설 K3s의 `ecr-credential-provider`가 이 키로 ECR 토큰을 받습니다. |
+| KT 허브 ECR Pull 액세스 키 발급 | IAM 콘솔에서 `terraform output kt_hub_ecr_pull_user_name` 사용자의 액세스 키를 발급해 허브 담당에게 전달합니다. 허브는 docker라서 이미지를 받기 전에 이 키로 ECR에 로그인합니다(토큰 12시간). 통제 UI 이미지(`control-ui`)만 받을 수 있습니다. |
 | Grafana 액세스 키 발급 | IAM 콘솔에서 `terraform output grafana_user_name` 사용자의 액세스 키를 발급해 KT Grafana의 CloudWatch 데이터 소스에 넣습니다. 비밀값이 State에 남지 않도록 Terraform으로 만들지 않습니다. |
 | 서브넷 라우터 Tailscale 가입 | 라우터 SG에는 SSH가 열려 있지 않습니다. SSM Session Manager로 접속하거나 Ansible의 SSM 연결로 가입시키고, 광고한 경로(`10.80.0.0/16`)는 Tailscale 관리 콘솔에서 승인합니다. |
 
