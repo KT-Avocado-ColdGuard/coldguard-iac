@@ -129,3 +129,19 @@ variable "alert_email" {
   type        = string
   default     = ""
 }
+
+variable "alert_emails" {
+  description = "AWS 내부 알림을 함께 받을 이메일 목록. alert_email과 같은 주소는 한 번만 구독합니다."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for e in var.alert_emails : can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", e))])
+    error_message = "alert_emails에는 이메일 주소만 넣습니다."
+  }
+
+  validation {
+    condition     = length(var.alert_emails) == length(distinct([for e in var.alert_emails : lower(e)]))
+    error_message = "alert_emails에 같은 주소가 두 번 들어 있습니다."
+  }
+}

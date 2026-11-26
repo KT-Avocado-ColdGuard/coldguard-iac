@@ -15,6 +15,13 @@ variable "alert_email" {
   default     = ""
 }
 
+# 함께 받을 이메일 목록. 비워 두면 추가 구독을 만들지 않습니다.
+variable "alert_emails" {
+  description = "SNS 알림을 함께 받을 이메일 주소 목록"
+  type        = list(string)
+  default     = []
+}
+
 # 서브넷 라우터가 KT 허브를 확인해 올리는 지표 이름공간
 variable "kt_hub_probe_namespace" {
   description = "KT 허브 상태 확인 지표의 CloudWatch 이름공간"

@@ -178,9 +178,10 @@ module "ecr" {
 module "monitoring" {
   source = "./modules/monitoring"
 
-  name        = var.name
-  environment = var.environment
-  alert_email = var.alert_email
+  name         = var.name
+  environment  = var.environment
+  alert_email  = var.alert_email
+  alert_emails = var.alert_emails
 }
 
 # 백업·이력 내보내기 S3 버킷

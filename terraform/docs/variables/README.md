@@ -32,10 +32,11 @@
 | `eks_cluster_viewer_arns` | `list(string)` | `[]` | EKS 조회 전용 권한(Access Entry, `AmazonEKSViewPolicy`)을 줄 IAM ARN. Secret 값은 볼 수 없습니다. IAM Identity Center 역할은 경로를 포함한 ARN 그대로 넣습니다. |
 | `eks_public_access_enabled` | `bool` | `true` | EKS Public API Endpoint 사용 여부. Tailscale 접속 확인 후 `false`로 바꿉니다. `false`이면 `eks_public_access_cidrs`는 적용되지 않지만, 라우터 장애 때 다시 `true`로 켜서 비상 접속할 주소로 남겨 둡니다. |
 | `alert_email` | `string` | `""` | AWS 내부 알림 SNS 이메일 구독. 비워 두면 구독을 만들지 않습니다. |
+| `alert_emails` | `list(string)` | `[]` | 같은 알림을 함께 받을 이메일 목록. 주소마다 구독을 따로 만들고, `alert_email`과 같은 주소는 뺍니다. |
 | `router_routed_cidrs` | `list(string)` | `[]` | Private Route Table에서 서브넷 라우터 ENI로 보낼 목적지 CIDR. 값을 넣으면 라우터 SG에 VPC 인그레스도 함께 열립니다. EKS의 tailnet 송신은 operator egress를 쓰므로 기본값은 비어 있습니다. |
 | `backup_service_account` | `object` | `coldguard` / `s3-backup` | 백업 CronJob에 S3 권한을 연결할 Namespace와 ServiceAccount |
 
-`alert_email`에 넣는 개인 이메일은 `terraform.tfvars`에만 두고 커밋하지 않습니다.
+`alert_email`·`alert_emails`에 넣는 개인 이메일은 `terraform.tfvars`에만 두고 커밋하지 않습니다.
 
 ### `subnets` 객체 속성
 
@@ -125,6 +126,7 @@ github_repo_id    = "1464803157"
 | `eks_cluster_viewer_arns` | Access Entry와 조회 정책 연결을 추가·삭제합니다. |
 | `eks_public_access_enabled` | EKS Endpoint 설정 갱신. 끄면 Tailscale을 거치지 않는 `kubectl`과 Bootstrap 실행이 막힙니다. |
 | `alert_email` | SNS 이메일 구독 생성·삭제 |
+| `alert_emails` | 주소별 SNS 이메일 구독 추가·삭제. 다른 주소의 구독은 건드리지 않습니다. |
 | `router_routed_cidrs` | Private Route Table의 서브넷 라우터 경로와 라우터 SG의 VPC 인그레스 추가·삭제 |
 | `backup_service_account` | Pod Identity 연결 교체. 매니페스트의 Namespace·ServiceAccount와 같아야 합니다. |
 
