@@ -93,3 +93,10 @@ vault.yml
 ansible/app-release.local.json
 ansible/app-inventory.local.ini
 ansible/.venv-apps/
+
+# Ansible sensitive files
+*_vault.yml
+vault_*.yml
+*.pw
+ansible/inventory/hosts.ini
+ansible/inventory/*.local.ini

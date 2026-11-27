@@ -1,0 +1,49 @@
+# ======================================
+# KT Cloud Hub
+# ======================================
+
+[kt]
+coldguard-kt-hub ansible_host=<TAILSCALE_IP>
+
+[kt:vars]
+ansible_user=root
+
+
+# ======================================
+# AWS Router
+# ======================================
+
+[aws_router]
+coldguard-aws-router ansible_host=<TAILSCALE_IP>
+
+[aws_router:vars]
+ansible_user=ubuntu
+ansible_become=true
+
+
+# ======================================
+# On-Premises
+# ======================================
+
+[onprem]
+facility-01 ansible_host=<TAILSCALE_IP>
+
+[onprem:vars]
+ansible_user=avocado
+ansible_connection=ssh
+ansible_become=true
+
+
+# ======================================
+# KT Cloud Load
+# ======================================
+
+[kt_load]
+coldguard-kt-load ansible_host=<PUBLIC_IP> ansible_port=<SSH_PORT>
+
+[kt_load:vars]
+ansible_user=root
+ansible_connection=ssh
+ansible_become=false
+ansible_ssh_private_key_file=<PEM_FILE_PATH>
+ansible_ssh_common_args='-o IdentitiesOnly=yes'
