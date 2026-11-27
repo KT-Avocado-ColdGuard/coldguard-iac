@@ -1,0 +1,12 @@
+---
+- name: Configure KT Cloud Load Server
+  hosts: kt_load
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ../group_vars/kt_load.yml
+    - ../group_vars/kt_load_vault.yml
+
+  roles:
+    - kt_load

@@ -1,0 +1,232 @@
+---
+# ======================================
+# 1. Architecture Verification
+# ======================================
+
+- name: Verify supported architecture
+  ansible.builtin.raw: |
+    set -eu
+
+    if [ "$(uname -m)" != "x86_64" ]; then
+      echo "Unsupported architecture"
+      exit 1
+    fi
+
+    echo "Architecture: x86_64"
+
+  changed_when: false
+
+
+# ======================================
+# 2. Required Packages
+# ======================================
+
+- name: Install required packages only when missing
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! rpm -q {{ item | quote }} >/dev/null 2>&1; then
+      dnf install -y {{ item | quote }}
+      echo KT_CHANGED
+    fi
+
+  loop:
+    - curl
+    - tar
+    - gzip
+    - libatomic
+
+  register: kt_load_dependency_run
+  changed_when: "'KT_CHANGED' in kt_load_dependency_run.stdout"
+
+
+# ======================================
+# 3. k6 Installation
+# ======================================
+
+- name: Install k6 only when missing
+  ansible.builtin.raw: |
+    set -eu
+
+    if [ ! -x {{ kt_load_k6_binary | quote }} ]; then
+
+      # Add official repository when missing
+      if [ ! -f /etc/yum.repos.d/k6.repo ]; then
+        dnf install -y {{ kt_load_k6_repo_url | quote }}
+        echo KT_CHANGED
+      fi
+
+      # Install k6
+      dnf install -y k6
+
+      echo KT_CHANGED
+    fi
+
+    test -x {{ kt_load_k6_binary | quote }}
+
+  register: kt_load_k6_install
+  changed_when: "'KT_CHANGED' in kt_load_k6_install.stdout"
+
+
+# ======================================
+# 4. k6 Version Verification
+# ======================================
+
+- name: Verify minimum k6 version
+  ansible.builtin.raw: |
+    set -eu
+
+    version="$({{ kt_load_k6_binary | quote }} version)"
+
+    {{ kt_load_python_path | quote }} -c '
+    import re
+    import sys
+
+    result = re.search(r"v?(\d+)\.(\d+)\.(\d+)", sys.argv[1])
+
+    if not result:
+        sys.exit("Unable to determine k6 version")
+
+    current = tuple(map(int, result.groups()))
+    minimum = tuple(map(int, sys.argv[2].split(".")))
+
+    if current < minimum:
+        sys.exit("Installed k6 version is too old")
+
+    print(sys.argv[1])
+    print("k6 version verification: OK")
+    ' "$version" {{ kt_load_k6_min_version | quote }}
+
+  register: kt_load_k6_verify
+  changed_when: false
+
+
+# ======================================
+# 5. emqtt-bench Installation
+# ======================================
+
+- name: Install emqtt-bench only when missing
+  ansible.builtin.raw: |
+    set -eu
+
+    target={{ kt_load_emqtt_install_dir | quote }}
+    binary={{ kt_load_emqtt_binary | quote }}
+
+    if [ -x "$binary" ]; then
+      exit 0
+    fi
+
+    # Preserve existing installation directory
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      echo "Existing emqtt-bench directory requires inspection"
+      exit 1
+    fi
+
+    # Create temporary working directory
+    umask 022
+
+    workdir="$(mktemp -d /opt/.emqtt-bench.XXXXXXXX)"
+
+    trap 'rm -rf "$workdir"' EXIT
+
+    archive="$workdir/emqtt-bench.tar.gz"
+
+    # Download official release
+    curl \
+      --fail \
+      --silent \
+      --show-error \
+      --location \
+      --retry 3 \
+      --connect-timeout 15 \
+      --max-time 300 \
+      --output "$archive" \
+      {{ kt_load_emqtt_download_url | quote }}
+
+    # Verify SHA256 checksum
+    printf '%s  %s\n' \
+      {{ kt_load_emqtt_sha256 | quote }} \
+      "$archive" | sha256sum -c -
+
+    # Extract archive
+    mkdir "$workdir/extracted"
+
+    tar \
+      --no-same-owner \
+      --no-same-permissions \
+      -xzf "$archive" \
+      -C "$workdir/extracted"
+
+    # Locate extracted executable
+    found="$(find "$workdir/extracted" \
+      -path '*/bin/emqtt_bench' -print)"
+
+    if [ ! -x "$found" ]; then
+      echo "emqtt-bench executable not found"
+      exit 1
+    fi
+
+    source_dir="$(dirname "$(dirname "$found")")"
+
+    # Move complete release to installation directory
+    chown -R root:root "$source_dir"
+    chmod 755 "$source_dir"
+
+    mv -T "$source_dir" "$target"
+
+    test -x "$binary"
+
+    echo KT_CHANGED
+
+  register: kt_load_emqtt_install
+  changed_when: "'KT_CHANGED' in kt_load_emqtt_install.stdout"
+
+
+# ======================================
+# 6. Service Account Execution Verification
+# ======================================
+
+- name: Verify load test tools as service account
+  ansible.builtin.raw: |
+    set -eu
+
+    cd {{ kt_load_home | quote }}
+
+    # Verify k6 execution
+    runuser -u {{ kt_load_user | quote }} -- \
+      {{ kt_load_k6_binary | quote }} version
+
+    # Verify emqtt-bench help
+    rc=0
+
+    help_output="$(timeout 30s \
+      runuser -u {{ kt_load_user | quote }} -- \
+      {{ kt_load_emqtt_binary | quote }} pub --help 2>&1)" \
+      || rc=$?
+
+    if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+      printf '%s\n' "$help_output"
+      exit 1
+    fi
+
+    # Verify CA certificate option
+    if ! printf '%s\n' "$help_output" | \
+      grep -q -- '--cacertfile'; then
+      echo "emqtt-bench does not support --cacertfile"
+      exit 1
+    fi
+
+    echo "emqtt-bench CA certificate option: OK"
+    echo "Service account execution: OK"
+
+  register: kt_load_tools_verify
+  changed_when: false
+
+
+# ======================================
+# 7. Result
+# ======================================
+
+- name: Display load test tools verification result
+  ansible.builtin.debug:
+    msg: "{{ kt_load_tools_verify.stdout_lines }}"

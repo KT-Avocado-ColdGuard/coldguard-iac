@@ -1,0 +1,193 @@
+---
+# ======================================
+# 1. System Requirements
+# ======================================
+
+- name: Check system requirements
+  ansible.builtin.raw: |
+    set -eu
+
+    test "$(id -u)" -eq 0
+
+    . /etc/os-release
+
+    if [ "$ID" != "rocky" ] || [ "$VERSION_ID" != "8.10" ]; then
+      echo "Unsupported OS: $ID $VERSION_ID"
+      exit 1
+    fi
+
+    test -x {{ kt_load_python_path | quote }}
+
+    {{ kt_load_python_path | quote }} -c \
+      'import sys; assert sys.version_info >= (3, 6)'
+
+    echo "OS: $PRETTY_NAME"
+    {{ kt_load_python_path | quote }} --version
+
+  register: kt_load_system_check
+  changed_when: false
+
+
+
+# ======================================
+# Ansible Python Runtime
+# ======================================
+
+- name: Install Python runtime for Ansible only when missing
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! rpm -q {{ kt_load_ansible_python_package | quote }} >/dev/null 2>&1; then
+
+      dnf install -y {{ kt_load_ansible_python_package | quote }}
+
+      echo KT_CHANGED
+    fi
+
+    test -x {{ ansible_python_interpreter | quote }}
+
+    {{ ansible_python_interpreter | quote }} --version
+
+  register: kt_load_ansible_python_run
+  changed_when: "'KT_CHANGED' in kt_load_ansible_python_run.stdout"
+
+
+
+# ======================================
+# 2. Hostname Configuration
+# ======================================
+
+- name: Set hostname only when different
+  ansible.builtin.raw: |
+    set -eu
+
+    if [ "$(hostnamectl --static)" != {{ kt_load_hostname | quote }} ]; then
+      hostnamectl set-hostname {{ kt_load_hostname | quote }}
+      echo KT_CHANGED
+    fi
+
+  register: kt_load_hostname_run
+  changed_when: "'KT_CHANGED' in kt_load_hostname_run.stdout"
+  when: kt_load_manage_hostname | bool
+
+
+# ======================================
+# 3. Service Group
+# ======================================
+
+- name: Create service group only when missing
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! getent group {{ kt_load_group | quote }} >/dev/null; then
+      groupadd --system {{ kt_load_group | quote }}
+      echo KT_CHANGED
+    fi
+
+  register: kt_load_group_run
+  changed_when: "'KT_CHANGED' in kt_load_group_run.stdout"
+
+
+# ======================================
+# 4. Service Account
+# ======================================
+
+- name: Create service account only when missing
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! id {{ kt_load_user | quote }} >/dev/null 2>&1; then
+
+      useradd \
+        --system \
+        --create-home \
+        --gid {{ kt_load_group | quote }} \
+        --home-dir {{ kt_load_home | quote }} \
+        --shell {{ kt_load_shell | quote }} \
+        {{ kt_load_user | quote }}
+
+      echo KT_CHANGED
+    fi
+
+  register: kt_load_user_run
+  changed_when: "'KT_CHANGED' in kt_load_user_run.stdout"
+
+
+# ======================================
+# 5. Service Account Verification
+# ======================================
+
+- name: Verify service account configuration
+  ansible.builtin.raw: |
+    set -eu
+
+    account="$(getent passwd {{ kt_load_user | quote }})"
+
+    test "$(echo "$account" | cut -d: -f6)" = {{ kt_load_home | quote }}
+
+    test "$(echo "$account" | cut -d: -f7)" = {{ kt_load_shell | quote }}
+
+    test "$(id -gn {{ kt_load_user | quote }})" = {{ kt_load_group | quote }}
+
+    case " $(id -nG {{ kt_load_user | quote }}) " in
+      *" wheel "*|*" sudo "*|*" docker "*)
+        echo "Unexpected privileged group"
+        exit 1
+        ;;
+    esac
+
+    echo "Service account configuration: OK"
+
+  changed_when: false
+
+
+# ======================================
+# 6. Directory Configuration
+# ======================================
+
+- name: Configure required directories
+  ansible.builtin.raw: |
+    set -eu
+
+    path={{ item.path | quote }}
+    expected={{ (item.owner ~ ':' ~ item.group ~ ':' ~ item.mode) | quote }}
+
+    if [ -L "$path" ]; then
+      echo "Unexpected symbolic link: $path"
+      exit 1
+    fi
+
+    if [ ! -d "$path" ] || \
+       [ "$(stat -c '%U:%G:%a' "$path")" != "$expected" ]; then
+
+      install -d \
+        -o {{ item.owner | quote }} \
+        -g {{ item.group | quote }} \
+        -m {{ item.mode | quote }} \
+        "$path"
+
+      echo KT_CHANGED
+    fi
+
+  loop:
+
+    - path: "{{ kt_load_deploy_dir }}"
+      owner: root
+      group: root
+      mode: "755"
+
+    - path: "{{ kt_load_home }}"
+      owner: "{{ kt_load_user }}"
+      group: "{{ kt_load_group }}"
+      mode: "750"
+
+    - path: "{{ kt_load_secrets_dir }}"
+      owner: root
+      group: "{{ kt_load_group }}"
+      mode: "750"
+
+  loop_control:
+    label: "{{ item.path }}"
+
+  register: kt_load_directory_run
+  changed_when: "'KT_CHANGED' in kt_load_directory_run.stdout"

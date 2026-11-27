@@ -1,0 +1,194 @@
+---
+# ======================================
+# 1. Tailscale Installation
+# ======================================
+
+- name: Install Tailscale only when missing
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! rpm -q tailscale >/dev/null 2>&1; then
+
+      # Add repository only when missing
+      if [ ! -f /etc/yum.repos.d/tailscale.repo ]; then
+
+        dnf install -y dnf-plugins-core
+
+        dnf config-manager --add-repo \
+          {{ kt_load_tailscale_repo_url | quote }}
+
+        echo KT_CHANGED
+      fi
+
+      dnf install -y 'tailscale-{{ kt_load_tailscale_version }}*'
+
+      echo KT_CHANGED
+    fi
+
+  register: kt_load_tailscale_install
+  changed_when: "'KT_CHANGED' in kt_load_tailscale_install.stdout"
+
+
+# ======================================
+# 2. Tailscale Service
+# ======================================
+
+- name: Enable and start Tailscale
+  ansible.builtin.raw: |
+    set -eu
+
+    if ! systemctl is-enabled --quiet tailscaled; then
+      systemctl enable tailscaled
+      echo KT_CHANGED
+    fi
+
+    if ! systemctl is-active --quiet tailscaled; then
+      systemctl start tailscaled
+      echo KT_CHANGED
+    fi
+
+  register: kt_load_tailscale_service
+  changed_when: "'KT_CHANGED' in kt_load_tailscale_service.stdout"
+
+
+# ======================================
+# 3. Tailnet Connection Status
+# ======================================
+
+- name: Check current Tailnet connection
+  ansible.builtin.raw: |
+    set -eu
+
+    status="$(tailscale status --json 2>/dev/null || true)"
+
+    printf '%s' "$status" | \
+      {{ kt_load_python_path | quote }} -c '
+    import json
+    import sys
+
+    status = json.load(sys.stdin)
+    print(status.get("BackendState", "Unknown"))
+    '
+
+  register: kt_load_tailnet_status
+  changed_when: false
+
+
+- name: Validate Tailnet connection state
+  ansible.builtin.assert:
+    that:
+      - >
+        (kt_load_tailnet_status.stdout | trim)
+        in ['Running', 'NeedsLogin']
+    fail_msg: "Unexpected Tailscale connection state"
+
+
+# ======================================
+# 4. Validate Auth Key
+# ======================================
+
+- name: Verify auth key is available
+  ansible.builtin.assert:
+    that:
+      - (kt_load_tailscale_authkey | default('') | trim | length) > 0
+    fail_msg: "Tailscale auth key is missing from Vault"
+
+  when: (kt_load_tailnet_status.stdout | trim) == 'NeedsLogin'
+  no_log: true
+
+
+- name: Confirm initial Tailnet registration
+  ansible.builtin.assert:
+    that:
+      - kt_load_allow_initial_join | default(false) | bool
+    fail_msg: >
+      Authentication is required.
+      Confirm this is a new device before allowing registration.
+
+  when: (kt_load_tailnet_status.stdout | trim) == 'NeedsLogin'
+
+
+# ======================================
+# 5. Tailnet Connection
+# ======================================
+
+- name: Join Tailnet using Vault auth key
+  ansible.builtin.raw: |
+    set -eu
+
+    umask 077
+
+    # Create temporary authentication file
+    auth_file="$(mktemp /run/kt-load-tskey.XXXXXXXX)"
+
+    # Remove temporary file when finished
+    trap 'rm -f "$auth_file"' EXIT
+
+    # Write decrypted Vault value
+    printf '%s' \
+      {{ kt_load_tailscale_authkey | quote }} > "$auth_file"
+
+    # Configure registration arguments
+    set -- \
+      --auth-key="file:$auth_file" \
+      --hostname={{ kt_load_hostname | quote }} \
+      --advertise-tags={{ kt_load_tailscale_tag | quote }} \
+      --timeout=60s
+
+    if [ {{ (kt_load_tailscale_enable_ssh | bool) | ternary('true', 'false') | quote }} = "true" ]; then
+      set -- "$@" --ssh
+    fi
+
+    # Join Tailnet
+    tailscale up "$@"
+
+    echo KT_CHANGED
+
+  register: kt_load_tailnet_join
+  changed_when: "'KT_CHANGED' in kt_load_tailnet_join.stdout"
+
+  when: (kt_load_tailnet_status.stdout | trim) == 'NeedsLogin'
+
+  no_log: true
+
+
+# ======================================
+# 6. Tailnet Verification
+# ======================================
+
+- name: Verify Tailnet connection and device tag
+  ansible.builtin.raw: |
+    set -eu
+
+    tailscale status --json | \
+      {{ kt_load_python_path | quote }} -c '
+    import json
+    import sys
+
+    status = json.load(sys.stdin)
+    state = status.get("BackendState", "Unknown")
+    tags = (status.get("Self") or {}).get("Tags") or []
+    expected_tag = sys.argv[1]
+
+    if state != "Running":
+        sys.exit("Tailscale is not running")
+
+    if expected_tag not in tags:
+        sys.exit("Expected Tailscale tag is missing")
+
+    print("Backend state: " + state)
+    print("Expected tag: " + expected_tag)
+    print("Tag verification: OK")
+    ' {{ kt_load_tailscale_tag | quote }}
+
+  register: kt_load_tailnet_verify
+  changed_when: false
+
+
+# ======================================
+# 7. Result
+# ======================================
+
+- name: Display Tailscale configuration result
+  ansible.builtin.debug:
+    msg: "{{ kt_load_tailnet_verify.stdout_lines }}"

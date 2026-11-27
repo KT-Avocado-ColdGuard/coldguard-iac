@@ -1,0 +1,152 @@
+---
+# ======================================
+# 1. Load Console Deployment
+# ======================================
+
+- name: Deploy load console Python source
+  ansible.builtin.copy:
+    src: "{{ kt_load_console_source }}"
+    dest: "{{ kt_load_deploy_dir }}/{{ kt_load_console_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: false
+
+  register: kt_load_console_copy
+
+
+# ======================================
+# 2. Python Syntax Verification
+# ======================================
+
+- name: Verify load console Python syntax
+  ansible.builtin.raw: |
+    set -eu
+
+    {{ kt_load_python_path | quote }} -c '
+    import ast
+    import sys
+
+    with open(sys.argv[1], "r", encoding="utf-8") as f:
+        ast.parse(f.read())
+
+    print("Python syntax: OK")
+    ' {{ (kt_load_deploy_dir ~ '/' ~ kt_load_console_file) | quote }}
+
+  changed_when: false
+
+
+# ======================================
+# 3. Load Console Environment Verification
+# ======================================
+
+- name: Check load console as service account
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/runuser
+      - -u
+      - "{{ kt_load_user }}"
+      - --
+      - /usr/bin/env
+      - "HOME={{ kt_load_home }}"
+      - "PATH=/usr/local/bin:/usr/bin:/bin"
+      - "LOAD_CONSOLE_PORT={{ kt_load_console_http_port }}"
+      - "LOAD_DATA_DIR={{ kt_load_home }}"
+      - "LOAD_SECRETS_DIR={{ kt_load_secrets_dir }}"
+      - "LOAD_K6_BIN={{ kt_load_k6_binary }}"
+      - "LOAD_EMQTT_BENCH_BIN={{ kt_load_emqtt_binary }}"
+      - "{{ kt_load_python_path }}"
+      - "{{ kt_load_deploy_dir }}/{{ kt_load_console_file }}"
+      - --check
+
+    chdir: "{{ kt_load_home }}"
+
+  register: kt_load_console_check
+  changed_when: false
+
+
+- name: Display load console verification result
+  ansible.builtin.debug:
+    msg: "{{ kt_load_console_check.stdout_lines }}"
+
+
+# ======================================
+# 4. Systemd Service Configuration
+# ======================================
+
+- name: Deploy load console systemd service
+  ansible.builtin.template:
+    src: coldguard-load-console.service.j2
+    dest: "/etc/systemd/system/{{ kt_load_console_service }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+
+  register: kt_load_console_unit
+
+
+# ======================================
+# 5. Systemd Configuration Verification
+# ======================================
+
+- name: Verify systemd service configuration
+  ansible.builtin.command:
+    argv:
+      - systemd-analyze
+      - verify
+      - "/etc/systemd/system/{{ kt_load_console_service }}.service"
+
+  changed_when: false
+
+
+# ======================================
+# 6. Enable and Start Service
+# ======================================
+
+- name: Enable and start load console service
+  ansible.builtin.systemd_service:
+    name: "{{ kt_load_console_service }}.service"
+
+    daemon_reload: true
+
+    enabled: true
+
+    state: >-
+      {{ 'restarted'
+         if kt_load_console_copy.changed
+         or kt_load_console_unit.changed
+         else 'started' }}
+
+
+# ======================================
+# 7. Health Check
+# ======================================
+
+- name: Verify load console health endpoint
+  ansible.builtin.uri:
+    url: "http://{{ kt_load_bind_address }}:{{ kt_load_console_http_port }}/healthz"
+    method: GET
+    status_code: 200
+    return_content: true
+    use_proxy: false
+    timeout: 5
+
+  register: kt_load_console_health
+
+  until:
+    - kt_load_console_health.status | default(0) == 200
+    - (kt_load_console_health.json | default({})).get('status') == 'ok'
+
+  retries: 10
+  delay: 3
+
+  changed_when: false
+
+
+# ======================================
+# 8. Result
+# ======================================
+
+- name: Display load console health result
+  ansible.builtin.debug:
+    msg: "{{ kt_load_console_health.json }}"

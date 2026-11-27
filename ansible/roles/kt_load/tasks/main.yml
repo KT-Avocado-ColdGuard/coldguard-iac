@@ -1,0 +1,46 @@
+---
+# ======================================
+# 1. Prepare Environment
+# ======================================
+
+- name: Prepare KT Load environment
+  ansible.builtin.import_tasks: prepare.yml
+
+# ======================================
+# 2. Tailscale Configuration
+# ======================================
+
+- name: Configure Tailscale
+  ansible.builtin.import_tasks: tailscale.yml
+
+
+# ======================================
+# 3. Load Test Tools
+# ======================================
+
+- name: Configure load test tools
+  ansible.builtin.import_tasks: tools.yml
+
+
+# ======================================
+# 4. Secret Files
+# ======================================
+
+- name: Configure secret files
+  ansible.builtin.import_tasks: secrets.yml
+
+
+# ======================================
+# 5. Load Console
+# ======================================
+
+- name: Configure load console
+  ansible.builtin.import_tasks: console.yml
+
+
+# ======================================
+# 6. Tailscale Serve
+# ======================================
+
+- name: Configure Tailscale Serve
+  ansible.builtin.import_tasks: serve.yml
