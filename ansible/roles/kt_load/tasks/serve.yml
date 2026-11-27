@@ -1,0 +1,169 @@
+---
+# ======================================
+# 1. Tailscale Serve Configuration
+# ======================================
+
+- name: Configure Tailscale HTTPS Serve
+  ansible.builtin.command:
+    argv:
+      - "{{ kt_load_python_path }}"
+      - -c
+      - |
+        import json
+        import subprocess
+        import sys
+
+        # Read current Tailscale device information
+        status = json.loads(
+            subprocess.check_output(
+                ["tailscale", "status", "--json"],
+                timeout=15
+            )
+        )
+
+        if status.get("BackendState") != "Running":
+            sys.exit("Tailscale is not running")
+
+        dns_name = (status.get("Self") or {}).get(
+            "DNSName", ""
+        ).rstrip(".")
+
+        if not dns_name:
+            sys.exit("Tailscale DNS name is missing")
+
+        # Required HTTPS mappings
+        targets = {
+            sys.argv[1]: sys.argv[2],
+            sys.argv[3]: sys.argv[4]
+        }
+
+        def get_config():
+            output = subprocess.check_output(
+                ["tailscale", "serve", "status", "--json"],
+                timeout=15
+            ).decode("utf-8").strip()
+
+            if output == "No serve config":
+                return {}
+
+            config = json.loads(output) or {}
+
+            # Never expose services publicly
+            if any((config.get("AllowFunnel") or {}).values()):
+                sys.exit("Unexpected public Funnel configuration")
+
+            # Preserve existing foreground configuration
+            if config.get("Foreground"):
+                sys.exit("Existing foreground Serve requires inspection")
+
+            return config
+
+        def mapping_state(config, port, backend):
+            tcp = config.get("TCP") or {}
+            web = config.get("Web") or {}
+
+            host_port = "{}:{}".format(dns_name, port)
+
+            matches = [
+                key for key in web
+                if key.rsplit(":", 1)[-1] == port
+            ]
+
+            # No existing configuration
+            if port not in tcp and not matches:
+                return "missing"
+
+            # Check existing HTTPS mapping
+            tcp_config = tcp.get(port) or {}
+
+            handlers = (
+                web.get(host_port) or {}
+            ).get("Handlers") or {}
+
+            proxy = (
+                handlers.get("/") or {}
+            ).get("Proxy", "")
+
+            if (
+                tcp_config.get("HTTPS") is True
+                and not tcp_config.get("HTTP")
+                and not tcp_config.get("TCPForward")
+                and matches == [host_port]
+                and set(handlers) == {"/"}
+                and proxy.rstrip("/") == backend.rstrip("/")
+            ):
+                return "configured"
+
+            sys.exit(
+                "Conflicting Serve configuration on port " + port
+            )
+
+        config = get_config()
+
+        # Check all ports before changing anything
+        for port, backend in targets.items():
+            mapping_state(config, port, backend)
+
+        # Add only missing HTTPS mappings
+        for port, backend in targets.items():
+
+            config = get_config()
+
+            if mapping_state(config, port, backend) == "configured":
+                print("HTTPS {}: already configured".format(port))
+                continue
+
+            subprocess.run(
+                [
+                    "tailscale", "serve", "--bg",
+                    "--https=" + port, backend
+                ],
+                check=True,
+                timeout=60,
+                stdin=subprocess.DEVNULL
+            )
+
+            print("KT_CHANGED")
+
+        # Verify final configuration
+        config = get_config()
+
+        for port, backend in targets.items():
+            if mapping_state(config, port, backend) != "configured":
+                sys.exit("Serve verification failed: " + port)
+
+            print("HTTPS {} -> {}: OK".format(port, backend))
+
+        print("Public Funnel: disabled")
+
+      - "{{ kt_load_console_https_port | string }}"
+      - "{{ kt_load_console_backend_url }}"
+      - "{{ kt_load_dashboard_https_port | string }}"
+      - "{{ kt_load_dashboard_backend_url }}"
+
+  register: kt_load_serve_run
+  changed_when: "'KT_CHANGED' in kt_load_serve_run.stdout"
+
+
+# ======================================
+# 2. Tailscale Serve Verification
+# ======================================
+
+- name: Check Tailscale Serve status
+  ansible.builtin.command:
+    argv:
+      - tailscale
+      - serve
+      - status
+
+  register: kt_load_serve_status
+  changed_when: false
+
+
+# ======================================
+# 3. Result
+# ======================================
+
+- name: Display Tailscale Serve configuration
+  ansible.builtin.debug:
+    msg: "{{ kt_load_serve_status.stdout_lines }}"

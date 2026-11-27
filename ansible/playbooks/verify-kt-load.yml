@@ -1,0 +1,530 @@
+---
+- name: Verify KT Cloud Load Server
+  hosts: kt_load
+  gather_facts: false
+  become: false
+
+  vars_files:
+    - ../group_vars/kt_load.yml
+
+  tasks:
+
+    # ======================================
+    # 1. System Environment
+    # ======================================
+
+    - name: Verify OS and Python runtimes
+      ansible.builtin.raw: |
+        set -eu
+
+        . /etc/os-release
+
+        test "$ID" = "rocky"
+        test "$VERSION_ID" = "8.10"
+        test "$(uname -m)" = "x86_64"
+
+        echo "OS: $PRETTY_NAME"
+        echo "Hostname: $(hostname)"
+
+        {{ kt_load_python_path | quote }} --version
+        {{ ansible_python_interpreter | quote }} --version
+
+      register: kt_load_verify_system
+      changed_when: false
+
+
+    # ======================================
+    # 2. Service Account
+    # ======================================
+
+    - name: Verify service account
+      ansible.builtin.raw: |
+        set -eu
+
+        account="$(getent passwd {{ kt_load_user | quote }})"
+
+        test "$(echo "$account" | cut -d: -f6)" = \
+          {{ kt_load_home | quote }}
+
+        test "$(echo "$account" | cut -d: -f7)" = \
+          {{ kt_load_shell | quote }}
+
+        test "$(id -gn {{ kt_load_user | quote }})" = \
+          {{ kt_load_group | quote }}
+
+        case " $(id -nG {{ kt_load_user | quote }}) " in
+          *" wheel "*|*" sudo "*|*" docker "*)
+            echo "Unexpected privileged group"
+            exit 1
+            ;;
+        esac
+
+        id {{ kt_load_user | quote }}
+
+        echo "Service account: OK"
+
+      changed_when: false
+
+
+    # ======================================
+    # 3. Directory Permissions
+    # ======================================
+
+    - name: Verify required directories
+      ansible.builtin.raw: |
+        set -eu
+
+        path={{ item.path | quote }}
+
+        expected={{ item.expected | quote }}
+
+        test ! -L "$path"
+        test -d "$path"
+
+        test "$(stat -c '%U:%G:%a' "$path")" = "$expected"
+
+        echo "$path: OK"
+
+      loop:
+        - path: "{{ kt_load_deploy_dir }}"
+          expected: "root:root:755"
+
+        - path: "{{ kt_load_home }}"
+          expected: "{{ kt_load_user }}:{{ kt_load_group }}:750"
+
+        - path: "{{ kt_load_secrets_dir }}"
+          expected: "root:{{ kt_load_group }}:750"
+
+      loop_control:
+        label: "{{ item.path }}"
+
+      changed_when: false
+
+
+    # ======================================
+    # 4. Tailscale Verification
+    # ======================================
+
+    - name: Verify Tailscale service and Tailnet
+      ansible.builtin.raw: |
+        set -eu
+
+        rpm -q tailscale
+
+        systemctl is-active --quiet tailscaled
+        systemctl is-enabled --quiet tailscaled
+
+        tailscale status --json | \
+          {{ kt_load_python_path | quote }} -c '
+        import json
+        import sys
+
+        data = json.load(sys.stdin)
+        device = data.get("Self") or {}
+
+        if data.get("BackendState") != "Running":
+            sys.exit("Tailscale is not running")
+
+        if sys.argv[1] not in (device.get("Tags") or []):
+            sys.exit("Expected Tailscale tag is missing")
+
+        print("BackendState: Running")
+        print("Tag verification: OK")
+        ' {{ kt_load_tailscale_tag | quote }}
+
+      register: kt_load_verify_tailscale
+      changed_when: false
+
+
+    # ======================================
+    # 5. Load Test Tools
+    # ======================================
+
+    - name: Verify k6 version
+      ansible.builtin.raw: |
+        set -eu
+
+        version="$(runuser -u {{ kt_load_user | quote }} -- \
+          {{ kt_load_k6_binary | quote }} version)"
+
+        {{ kt_load_python_path | quote }} -c '
+        import re
+        import sys
+
+        result = re.search(r"v?(\d+)\.(\d+)\.(\d+)", sys.argv[1])
+
+        if not result:
+            sys.exit("Unable to determine k6 version")
+
+        current = tuple(map(int, result.groups()))
+        minimum = tuple(map(int, sys.argv[2].split(".")))
+
+        if current < minimum:
+            sys.exit("Installed k6 version is too old")
+
+        print(sys.argv[1])
+        print("k6 version: OK")
+        ' "$version" {{ kt_load_k6_min_version | quote }}
+
+      register: kt_load_verify_k6
+      changed_when: false
+
+
+    - name: Verify emqtt-bench execution
+      ansible.builtin.raw: |
+        set -eu
+
+        cd {{ kt_load_home | quote }}
+
+        rc=0
+
+        output="$(timeout 30s \
+          runuser -u {{ kt_load_user | quote }} -- \
+          {{ kt_load_emqtt_binary | quote }} pub --help 2>&1)" \
+          || rc=$?
+
+        if [ "$rc" -ne 0 ] && [ "$rc" -ne 1 ]; then
+          echo "emqtt-bench execution failed"
+          exit 1
+        fi
+
+        printf '%s\n' "$output" | grep -q -- '--cacertfile'
+
+        echo "emqtt-bench execution: OK"
+        echo "CA certificate option: OK"
+
+      register: kt_load_verify_emqtt
+      changed_when: false
+
+
+    # ======================================
+    # 6. Secret Files
+    # ======================================
+
+    - name: Verify secret files and access permissions
+      ansible.builtin.raw: |
+        set -eu
+
+        path={{ item.path | quote }}
+
+        expected={{ ('root:' ~ kt_load_group ~ ':' ~ item.mode) | quote }}
+
+        test ! -L "$path"
+        test -f "$path"
+        test -s "$path"
+
+        test "$(stat -c '%U:%G:%a' "$path")" = "$expected"
+
+        runuser -u {{ kt_load_user | quote }} -- test -r "$path"
+
+        if runuser -u {{ kt_load_user | quote }} -- test -w "$path"; then
+          echo "Unexpected write permission"
+          exit 1
+        fi
+
+        echo "$path: OK"
+
+      loop:
+        - path: "{{ kt_load_api_key_file }}"
+          mode: "640"
+
+        - path: "{{ kt_load_mqtt_password_file }}"
+          mode: "640"
+
+        - path: "{{ kt_load_mqtt_ca_file }}"
+          mode: "644"
+
+      loop_control:
+        label: "{{ item.path }}"
+
+      changed_when: false
+
+
+    - name: Verify MQTT CA certificate validity
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "{{ kt_load_mqtt_ca_file }}"
+          - -noout
+          - -checkend
+          - "0"
+
+      changed_when: false
+
+
+    # ======================================
+    # 7. Load Console Environment
+    # ======================================
+
+    - name: Verify load console environment and Control API
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/runuser
+          - -u
+          - "{{ kt_load_user }}"
+          - --
+          - /usr/bin/env
+          - "HOME={{ kt_load_home }}"
+          - "LOAD_CONSOLE_PORT={{ kt_load_console_http_port }}"
+          - "LOAD_DATA_DIR={{ kt_load_home }}"
+          - "LOAD_SECRETS_DIR={{ kt_load_secrets_dir }}"
+          - "LOAD_K6_BIN={{ kt_load_k6_binary }}"
+          - "LOAD_EMQTT_BENCH_BIN={{ kt_load_emqtt_binary }}"
+          - "{{ kt_load_python_path }}"
+          - -c
+          - |
+            import os
+            import runpy
+            import sys
+
+            app = runpy.run_path(sys.argv[1])
+
+            app["validate_presets"](app["PRESETS"])
+
+            net = app["NET"].get(max_age=0)
+            items = app["check_env"](net)
+
+            for item in items:
+                app["out"]("{}: {}".format(
+                    item["label"],
+                    "OK" if item["ok"] else "FAIL"
+                ))
+
+            if not all(item["ok"] for item in items):
+                sys.exit("Console environment verification failed")
+
+            _, api = app["endpoints"](net)
+
+            try:
+                ages = app["fetch_ages"](
+                    api, app["read_secret"]("api.key")
+                )
+            except Exception as exc:
+                sys.exit("Control API verification failed: " +
+                         type(exc).__name__)
+
+            fresh = [
+                age for age in ages.values()
+                if age <= app["GUARD_FRESH_SEC"]
+            ]
+
+            if not fresh:
+                sys.exit("No fresh facility data")
+
+            if not os.access(
+                app["RUNS_DIR"], os.W_OK | os.X_OK
+            ):
+                sys.exit("Results directory is not writable")
+
+            print("Control API: OK")
+            print("Fresh devices: {}".format(len(fresh)))
+            print("Results directory: OK")
+
+          - "{{ kt_load_deploy_dir }}/{{ kt_load_console_file }}"
+
+      register: kt_load_verify_console
+      changed_when: false
+
+
+    # ======================================
+    # 8. Systemd Service
+    # ======================================
+
+    - name: Verify load console systemd service
+      ansible.builtin.raw: |
+        set -eu
+
+        service={{ (kt_load_console_service ~ '.service') | quote }}
+
+        systemctl is-active --quiet "$service"
+        systemctl is-enabled --quiet "$service"
+
+        test "$(systemctl show "$service" -p User --value)" = \
+          {{ kt_load_user | quote }}
+
+        test "$(systemctl show "$service" -p LimitNOFILE --value)" = \
+          {{ (kt_load_nofile | string) | quote }}
+
+        test "$(systemctl show "$service" -p NoNewPrivileges --value)" = "yes"
+
+        test "$(systemctl show "$service" -p KillMode --value)" = "control-group"
+
+        systemctl show "$service" \
+          -p ActiveState \
+          -p UnitFileState \
+          -p User \
+          -p LimitNOFILE \
+          -p NoNewPrivileges \
+          -p KillMode \
+          -p Restart
+
+      register: kt_load_verify_service
+      changed_when: false
+
+
+    # ======================================
+    # 9. HTTP Health Check
+    # ======================================
+
+    - name: Verify load console health endpoint
+      ansible.builtin.uri:
+        url: "http://{{ kt_load_bind_address }}:{{ kt_load_console_http_port }}/healthz"
+        method: GET
+        status_code: 200
+        return_content: true
+        use_proxy: false
+        timeout: 5
+
+      register: kt_load_verify_health
+
+      failed_when: >
+        kt_load_verify_health.status != 200 or
+        (kt_load_verify_health.json | default({})).get('status') != 'ok'
+
+      changed_when: false
+
+
+    - name: Verify unauthenticated console access is rejected
+      ansible.builtin.uri:
+        url: "http://{{ kt_load_bind_address }}:{{ kt_load_console_http_port }}/"
+        method: GET
+        status_code: 403
+        use_proxy: false
+        timeout: 5
+
+      changed_when: false
+
+
+    # ======================================
+    # 10. Tailscale Serve
+    # ======================================
+
+    - name: Verify HTTPS Serve mappings and Funnel status
+      ansible.builtin.command:
+        argv:
+          - "{{ kt_load_python_path }}"
+          - -c
+          - |
+            import json
+            import subprocess
+            import sys
+
+            status = json.loads(subprocess.check_output(
+                ["tailscale", "status", "--json"],
+                timeout=15
+            ))
+
+            dns = (status.get("Self") or {}).get(
+                "DNSName", ""
+            ).rstrip(".")
+
+            if not dns:
+                sys.exit("Missing Tailscale DNS name")
+
+            config = json.loads(subprocess.check_output(
+                ["tailscale", "serve", "status", "--json"],
+                timeout=15
+            )) or {}
+
+            if any((config.get("AllowFunnel") or {}).values()):
+                sys.exit("Public Funnel is enabled")
+
+            if config.get("Foreground"):
+                sys.exit("Unexpected foreground Serve configuration")
+
+            tcp = config.get("TCP") or {}
+            web = config.get("Web") or {}
+
+            targets = {
+                sys.argv[1]: sys.argv[2],
+                sys.argv[3]: sys.argv[4]
+            }
+
+            for port, backend in targets.items():
+                host_port = "{}:{}".format(dns, port)
+
+                if not (tcp.get(port) or {}).get("HTTPS"):
+                    sys.exit("HTTPS is not enabled: " + port)
+
+                handlers = (web.get(host_port) or {}).get(
+                    "Handlers"
+                ) or {}
+
+                proxy = (handlers.get("/") or {}).get(
+                    "Proxy", ""
+                )
+
+                if proxy.rstrip("/") != backend.rstrip("/"):
+                    sys.exit("Incorrect backend: " + port)
+
+                print("HTTPS {} -> {}: OK".format(port, backend))
+
+            print("Public Funnel: disabled")
+
+          - "{{ kt_load_console_https_port | string }}"
+          - "{{ kt_load_console_backend_url }}"
+          - "{{ kt_load_dashboard_https_port | string }}"
+          - "{{ kt_load_dashboard_backend_url }}"
+
+      register: kt_load_verify_serve
+      changed_when: false
+
+
+    # ======================================
+    # 11. MQTT Network Path
+    # ======================================
+
+    - name: Verify direct Tailscale path to MQTT broker
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - "90s"
+          - tailscale
+          - ping
+          - -c
+          - "60"
+          - coldguard-mqtt
+
+      register: kt_load_verify_mqtt_path
+      changed_when: false
+
+
+    - name: Display MQTT network path
+      ansible.builtin.debug:
+        msg: "{{ kt_load_verify_mqtt_path.stdout_lines }}"
+
+
+    - name: Confirm direct MQTT network path
+      ansible.builtin.assert:
+        that:
+          - >
+            (kt_load_verify_mqtt_path.stdout |
+            regex_search('via (?:[0-9.]+:[0-9]+|\[[0-9a-fA-F:]+\]:[0-9]+)'))
+            is not none
+
+        fail_msg: >
+          Direct MQTT path was not confirmed.
+          Check Tailscale DERP or relay connectivity.
+
+        success_msg: "Direct Tailscale connection to MQTT broker confirmed"
+
+
+    # ======================================
+    # 12. Verification Summary
+    # ======================================
+
+    - name: Display verification summary
+      ansible.builtin.debug:
+        msg:
+          - "===== KT Load Verification ====="
+          - "{{ kt_load_verify_system.stdout_lines }}"
+          - "{{ kt_load_verify_tailscale.stdout_lines }}"
+          - "{{ kt_load_verify_k6.stdout_lines }}"
+          - "{{ kt_load_verify_emqtt.stdout_lines }}"
+          - "{{ kt_load_verify_console.stdout_lines }}"
+          - "{{ kt_load_verify_service.stdout_lines }}"
+          - "{{ kt_load_verify_health.json }}"
+          - "{{ kt_load_verify_serve.stdout_lines }}"
+          - "All automated verification checks passed"

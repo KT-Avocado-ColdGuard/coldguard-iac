@@ -1,0 +1,36 @@
+[Unit]
+Description=ColdGuard Load Test Console
+Wants=network-online.target
+After=network-online.target tailscaled.service
+Requires=tailscaled.service
+
+[Service]
+Type=simple
+
+User={{ kt_load_user }}
+Group={{ kt_load_group }}
+
+WorkingDirectory={{ kt_load_home }}
+
+ExecStart={{ kt_load_python_path }} {{ kt_load_deploy_dir }}/{{ kt_load_console_file }}
+
+Environment="HOME={{ kt_load_home }}"
+Environment="PATH=/usr/local/bin:/usr/bin:/bin"
+
+Environment="LOAD_CONSOLE_PORT={{ kt_load_console_http_port }}"
+Environment="LOAD_DATA_DIR={{ kt_load_home }}"
+Environment="LOAD_SECRETS_DIR={{ kt_load_secrets_dir }}"
+
+Environment="LOAD_K6_BIN={{ kt_load_k6_binary }}"
+Environment="LOAD_EMQTT_BENCH_BIN={{ kt_load_emqtt_binary }}"
+
+LimitNOFILE={{ kt_load_nofile }}
+NoNewPrivileges=yes
+
+Restart=on-failure
+RestartSec={{ kt_load_restart_sec }}
+
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
